@@ -1,9 +1,11 @@
+import discord
+from discord import utils, Interaction, app_commands, ButtonStyle
+
 from discord.ext import commands
+from discord.ext.commands import Context
 from discord.ui import Button, View
 from discord.ext.commands import Cog, Bot
-from discord import utils, Embed, Member, Message, Interaction, app_commands, ButtonStyle
-from discord.app_commands import command, Group, describe
-import os
+
 from .roles.bettor_app_roles import role_emoji_map
 from .roles.user_roles import *
 from .channels.channel_ids import *
@@ -82,3 +84,32 @@ class RoleManagementCog(Cog):
             await channel.send("All roles are correct. No changes made.")
 
         await interaction.response.send_message("Role check complete!")
+    
+    @commands.command()
+    @commands.has_permissions(administrator=True)  # Restrict to users with Admin permissions
+    async def nash_lover(self, ctx: Context):
+        # Create a view to hold the buttons
+        view = View(timeout=None)
+        # Create buttons for each role and add them to the view
+        button = Button(label="GET THE NASH ROLE", style=ButtonStyle.primary, emoji="👍")
+
+        async def button_callback(interaction, role_name="NASH LOVER"):
+            # Get the role
+            role = discord.utils.get(interaction.guild.roles, name="NASH LOVER")
+
+            if role:
+                # Toggle the role - if the user already has the role, remove it; otherwise, add it
+                if role in interaction.user.roles:
+                    await interaction.user.remove_roles(role)
+                    await interaction.response.send_message(f"Removed the {role.name} role!", ephemeral=True)
+                else:
+                    await interaction.user.add_roles(role)
+                    await interaction.response.send_message(f"Added the {role.name} role!", ephemeral=True)
+            else:
+                await interaction.response.send_message(f"Role `{role_name}` not found.", ephemeral=True)
+
+        button.callback = button_callback
+        view.add_item(button)
+
+        # Send the message with the buttons to the user's DM
+        await ctx.send("React with a thumbs-up to get the NASH LOVER role!", view=view)

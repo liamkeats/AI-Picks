@@ -1,8 +1,8 @@
 from __future__ import annotations
 import discord
-from discord.ext import commands, tasks
-from discord.ext.commands import Bot, Context
-from discord import errors, app_commands, Intents
+from discord.ext import commands
+from discord.ext.commands import Context
+from discord import Intents
 from dotenv import load_dotenv
 import os
 from cogs.role_management import AppBettingButtons, RoleManagementCog

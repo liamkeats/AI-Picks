@@ -20,4 +20,5 @@ role_emoji_map = {
     "TheScore": "📊",
     "TonyBet": "💰",
     "Prize Picks": "🎮",
+    "Fanatics": "📱",
 }
