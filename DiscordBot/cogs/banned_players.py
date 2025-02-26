@@ -2,7 +2,8 @@ import discord
 from discord import app_commands, Interaction, Embed
 from discord.ext import commands, tasks
 from discord.ext.commands import Cog, Context
-from collections import Counter
+from discord.utils import get
+from collections import Counter, defaultdict
 import asyncio
 
 from .roles.user_roles import *
@@ -18,10 +19,13 @@ class ParlayBan(Cog):
     def __init__(self, bot):
         self.bot = bot
         self.nominations = Counter()
+        self.user_nominations = defaultdict(int)
         self.votes = {}
         self.ban_list = []
         self.voting_active = False
-        self.channel_id = None  # Set this to the ban list channel
+        self.channel_id: int = 1344374500271329320  # Set this to the ban list channel
+        self.max_nominations_per_user = 5
+        self.poll_message_id: int = None
 
     @app_commands.command(name="nominate", description="Nominate a player to be banned from parlays this week")
     async def nominate(self, interaction: Interaction, player_name: str):
@@ -30,8 +34,14 @@ class ParlayBan(Cog):
             await interaction.response.send_message("Nominations are closed. Voting is in progress.")
             return
         
+        user_id = interaction.user.id
+        if self.user_nominations[user_id] >= self.max_nominations_per_user:
+            await interaction.response.send_message("❌ You have reached your nomination limit (5).", ephemeral=True)
+            return
+
         normalized_name = player_name.lower().strip()
         self.nominations[normalized_name] += 1
+        self.user_nominations[user_id] += 1
         await interaction.response.send_message(f"✅ {player_name.title()} has been nominated! ({self.nominations[normalized_name]} votes)")
 
     @commands.command()
@@ -43,14 +53,21 @@ class ParlayBan(Cog):
             await ctx.send("No nominations to vote on!")
             return
         
+        channel = self.bot.get_channel(self.channel_id)
+        if not channel:
+            await ctx.send("❌ The `#ban_list` channel was not found.")
+            return
+        
         self.voting_active = True
+        self.user_nominations.clear()
         top_players = self.nominations.most_common(10)  # Get top 10 nominated players
         self.votes = {player[0]: 0 for player in top_players}
         
         embed = Embed(title="🗳️ Parlay Ban List Voting", description="React to vote for a player to be banned this week!", color=discord.Color.red())
-        message_content = "\n".join([f"**{i+1}.** {player[0].title()}" for i, player in enumerate(top_players)])
+        message_content = "\n".join([f"**{i+1}. ** {player[0].title()} " for i, player in enumerate(top_players)])
         embed.add_field(name="Candidates", value=message_content, inline=False)
-        poll_message = await ctx.send(embed=embed)
+        poll_message = await channel.send(embed=embed)
+        self.poll_message_id = poll_message.id
         
         # Add reactions for voting
         reactions = ["1️⃣", "2️⃣", "3️⃣", "4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"]
@@ -58,13 +75,13 @@ class ParlayBan(Cog):
             await poll_message.add_reaction(reactions[i])
         
         self.bot.add_listener(self.handle_reaction_add, "on_reaction_add")
+        await ctx.send("before voting end")
         await asyncio.sleep(60)  # Adjust voting time as needed (e.g., 24 hours)
-        await self.end_voting(ctx, poll_message)
+        await self.end_voting(ctx)
         self.bot.remove_listener(self.handle_reaction_add, "on_reaction_add")
     
     @start_voting.error
     async def start_voting_error(self, ctx: Context, error):
-
         if isinstance(error, commands.MissingPermissions):
             await ctx.send("You do not have permission to use this command", delete_after=5)
 
@@ -84,33 +101,44 @@ class ParlayBan(Cog):
                         await message.remove_reaction(r.emoji, user)
                         break
     
-    async def end_voting(self, ctx: Context, poll_message):
+    async def end_voting(self, ctx: Context):
+        print("🔍 DEBUG: end_voting started")
         """End the voting phase and finalize the ban list."""
-        poll_message = await ctx.channel.fetch_message(poll_message.id)
-        reactions = poll_message.reactions
-        voters = {}
+        channel = self.bot.get_channel(self.channel_id)
+        if not channel:
+            print("❌ ERROR: Ban list channel not found.")
+            return
         
+        poll_message = await channel.fetch_message(self.poll_message_id)
+        reactions = poll_message.reactions
+        print(f"🔍 DEBUG: Found {len(reactions)} reactions")  # ✅ Confirm reactions exist
+        
+        voters = {}
         for i, reaction in enumerate(reactions):
             if i < len(self.votes):
                 async for user in reaction.users():
+                    print(f"🔍 DEBUG: User {user} reacted with {reaction.emoji}")  # ✅ Check if users are being counted
                     if user != self.bot.user and user.id not in voters:
                         self.votes[list(self.votes.keys())[i]] += 1
                         voters[user.id] = reaction.emoji
+
+        print(f"🔍 DEBUG: Final Vote Counts: {self.votes}")
         
         # Determine the most voted player
-        most_voted_player = max(self.votes.items(), key=lambda x: x[1], default=None)
-        self.ban_list = [most_voted_player[0].title()] if most_voted_player else []
+        top_voted_players = sorted(self.votes.items(), key=lambda x: x[1], reverse=True)[:3]
+        self.ban_list = [player[0].title() for player in top_voted_players]
+        print(f"🔍 DEBUG: Final Ban List: {self.ban_list}")
+
         self.nominations.clear()
         self.voting_active = False
+        print(f"🔍 DEBUG: Voting Active Status: {self.voting_active}")
+
+        ban_list_message = "\n".join([f"🚫 {player[0].title()} ({player[1]} votes)" for player in top_voted_players])
+        embed = Embed(title="🚨 Weekly Parlay Ban List", description=ban_list_message if ban_list_message else "No players received votes.", color=discord.Color.red())
         
-        ban_list_message = f"🚫 {most_voted_player[0]} ({most_voted_player[1]} votes)" if most_voted_player else "No players received votes."
-        embed = Embed(title="🚨 Weekly Parlay Ban List", description=ban_list_message, color=discord.Color.red())
-        
-        if self.channel_id:
-            channel = self.bot.get_channel(self.channel_id)
+        if channel:
+            print(f"🔍 DEBUG: Sending final ban list to {channel.name}")
             await channel.send(embed=embed)
-        else:
-            await ctx.send(embed=embed)
 
     @app_commands.command(name="show_banlist", description="View the current week's banned players.")
     async def show_banlist(self, interaction: Interaction):
