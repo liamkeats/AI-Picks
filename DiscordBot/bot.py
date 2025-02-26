@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 from cogs.role_management import AppBettingButtons, RoleManagementCog
 from cogs.channel_messages import ChannelMessagesCog
 from cogs.embeds import EmbedsCog
+from cogs.banned_players import ParlayBan
 
 # Load environment variables from token.env file
 load_dotenv("token.env")
@@ -31,6 +32,7 @@ class AIPicks(Bot):
         await self.add_cog(RoleManagementCog(self))
         await self.add_cog(ChannelMessagesCog(self))
         await self.add_cog(EmbedsCog(self))
+        await self.add_cog(ParlayBan(self))
         self.add_view(AppBettingButtons())  # add buttons view
 
 bot = AIPicks()
