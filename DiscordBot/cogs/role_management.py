@@ -113,3 +113,34 @@ class RoleManagementCog(Cog):
 
         # Send the message with the buttons to the user's DM
         await ctx.send("React with a thumbs-up to get the NASH LOVER role!", view=view)
+
+    @nash_lover.error
+    async def nash_lover_error(self, ctx, error):
+        """Handles errors for the reactionbuttons command."""
+        if isinstance(error, commands.MissingPermissions):
+            await ctx.send("You do not have permission to use this command.", delete_after=5)
+
+
+    @Cog.listener()
+    async def on_member_update(self, before, after):
+
+        if any(role.id in IGNORED_ROLE_IDS for role in after.roles):
+            return
+
+        vip_role = discord.utils.get(after.guild.roles, id=VIP_ROLE_ID)
+        free_role = discord.utils.get(after.guild.roles, id=FREE_ROLE_ID)
+
+        if vip_role and free_role:
+            #if the vip roles is added and user has free role
+            if vip_role in after.roles and free_role in after.roles:
+                await after.remove_roles(free_role)
+                channel = self.bot.get_channel(LOG_CHANNEL_ID)
+                if channel:
+                    await channel.send(f"Removed 'Free' role from {after.mention} because they have VIP.")
+
+            # if vip is removed and no free role add the free role
+            elif vip_role not in after.roles and free_role not in after.roles:
+                await after.add_roles(free_role)
+                channel = self.bot.get_channel(LOG_CHANNEL_ID)
+                if channel:
+                    await channel.send(f"Added 'Free' role to {after.mention} because they don't have VIP.")
