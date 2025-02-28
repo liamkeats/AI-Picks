@@ -75,8 +75,7 @@ class ParlayBan(Cog):
             await poll_message.add_reaction(reactions[i])
         
         self.bot.add_listener(self.handle_reaction_add, "on_reaction_add")
-        await ctx.send("before voting end")
-        await asyncio.sleep(60)  # Adjust voting time as needed (e.g., 24 hours)
+        await asyncio.sleep(43200)  # 12 hours to seconds
         await self.end_voting(ctx)
         self.bot.remove_listener(self.handle_reaction_add, "on_reaction_add")
     
