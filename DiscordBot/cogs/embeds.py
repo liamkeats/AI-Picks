@@ -44,9 +44,9 @@ class EmbedsCog(Cog):
     async def welcome(self, ctx: Context):
         # Create an embed message
         embed = Embed(
-            title="Welcome to AI Picks Discord 🎉",
+            title="**Welcome to AI Picks Discord 🎉**",
             description=(
-                "**Check out this video to join VIP for 30 Days Completely FREE! 👉 (video)**\n\n"
+                "**Check out this video to join VIP for 30 Days Completely FREE! 👉 https://discord.com/channels/1309493151102271488/1312451356400812103/1348157464536678493**\n\n"
                 f"✅ FREE PICKS : 1-2 free picks/day are posted in <#{free_picks_channel}> \n\n"
                 f"🏆 VIP COMMUNITY: ALL plays are posted in <#{vip_plays_channel}>\n\n"
                 f"💰 Join VIP for 30 Days FREE or Extend your plan here<#{free_vip_channel}>\n\n"
@@ -84,3 +84,26 @@ class EmbedsCog(Cog):
         )
         embed.set_footer(text="AI Picks | Numbers Don't Lie")
         await ctx.send(embed=embed)
+
+    @commands.command()
+    @commands.has_permissions(administrator = True)
+    async def join_vip(self, ctx: Context):
+
+        embed = Embed(
+            title="**Are You Ready To Become A Winning Sports Bettor With Our Analysts?💰**",
+            description=(
+                "**\n📢 WHAT’S INCLUDED IN VIP? 📢**\n\n"
+                f"**🔥 All Expert Picks →** Get access to every slip posted in <#{vip_plays_channel}>, covering PrizePicks, Sleeper, Underdog, Vivid, and more!\n\n"
+                "**💬 Exclusive Community Access →** Join our **active betting community**, where members share their own winning slips, discuss plays, and sweat out bets together like a real **betting team.**\n\n"
+                "**🎁 Exclusive Giveaways & Content →** VIP members get access to **giveaways, premium tools, and betting insights** not available to anyone else.\n\n"
+                "**📞 1-on-1 Support →** Need help with plays, bankroll management, or strategy? Get direct access to experienced bettors for guidance.\n\n"
+                "**💰 Maximize Your Edge →** Gain **higher-value picks, better discussions, and exclusive betting advantages** to help you win more!\n\n"
+                "**🚀 Upgrade Now & Join the Team!\n\n**"
+                "[**🔥CLICK HERE TO JOIN**](https://www.winible.com/aipicks) 🔗"
+            ),
+            color=Color.green()
+        )
+        embed.set_footer(text="AI Picks | Numbers Don't Lie")
+
+        await ctx.send(embed=embed)
+        

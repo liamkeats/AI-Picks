@@ -7,7 +7,7 @@ from discord.ext.commands import Context, Bot
 from discord import Intents
 from dotenv import load_dotenv
 
-from cogs.role_management import AppBettingButtons, RoleManagementCog
+from cogs.role_management import AppBettingButtons, RoleManagementCog, SportSelectionButtons
 from cogs.channel_messages import ChannelMessagesCog
 from cogs.embeds import EmbedsCog
 from cogs.banned_players import ParlayBan
@@ -33,7 +33,8 @@ class AIPicks(Bot):
         await self.add_cog(ChannelMessagesCog(self))
         await self.add_cog(EmbedsCog(self))
         await self.add_cog(ParlayBan(self))
-        self.add_view(AppBettingButtons())  # add buttons view
+        self.add_view(AppBettingButtons())
+        self.add_view(SportSelectionButtons())
 
 bot = AIPicks()
 

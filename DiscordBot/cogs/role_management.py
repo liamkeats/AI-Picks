@@ -1,12 +1,12 @@
 import discord
 from discord import utils, Interaction, app_commands, ButtonStyle
-
 from discord.ext import commands
 from discord.ext.commands import Context
 from discord.ui import Button, View
 from discord.ext.commands import Cog, Bot
 
 from .roles.bettor_app_roles import role_emoji_map
+from .roles.sport_roles import sports_role_map
 from .roles.user_roles import *
 from .channels.channel_ids import *
 
@@ -38,6 +38,33 @@ class AppBettingButtons(View):
         else:
             await interaction.response.send_message(f"Role `{role_name}` not found.", ephemeral=True)
 
+class SportSelectionButtons(View):
+    def __init__(self,):
+        super().__init__(timeout=None)
+        for role_name, emoji in sports_role_map.items():
+            button = Button(
+                label = role_name,
+                style = ButtonStyle.primary,
+                emoji = emoji,
+                custom_id = f"{role_name.lower()}_button"
+            )
+            button.callback = self.role_button_callback
+            self.add_item(button)
+
+    async def role_button_callback(self, interaction:Interaction):
+        role_name = interaction.data['custom_id'].split('_')[0].upper()
+        role = utils.get(interaction.guild.roles, name=role_name)
+
+        if role:
+            if role in interaction.user.roles:
+                await interaction.user.remove_roles(role)
+                await interaction.response.send_message(f"Removed the {role_name} role!", ephemeral= True)
+            else:
+                await interaction.user.add_roles(role)
+                await interaction.response.send_message(f"Added the {role_name} role!", ephemeral=True)
+        else:
+            await interaction.response.send_message(f"Role `{role_name}` not found.", ephemeral=True)
+
 class RoleManagementCog(Cog):
     def __init__(self, bot: Bot) -> None:
         self.bot = bot
@@ -45,10 +72,21 @@ class RoleManagementCog(Cog):
 
     @commands.command()
     @commands.has_permissions(administrator=True)
-    async def reactionbuttons(self, ctx):
+    async def approles(self, ctx):
         await ctx.send("Select the apps you use the most", view=AppBettingButtons())
         
-    @reactionbuttons.error
+    @approles.error
+    async def reactionbuttons_error(self, ctx, error):
+        """Handles errors for the reactionbuttons command."""
+        if isinstance(error, commands.MissingPermissions):
+            await ctx.send("You do not have permission to use this command.", delete_after=5)
+    
+    @commands.command()
+    @commands.has_permissions(administrator=True)
+    async def sportsroles(self, ctx):
+        await ctx.send("Select the apps you use the most", view=SportSelectionButtons())
+        
+    @sportsroles.error
     async def reactionbuttons_error(self, ctx, error):
         """Handles errors for the reactionbuttons command."""
         if isinstance(error, commands.MissingPermissions):
