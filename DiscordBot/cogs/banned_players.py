@@ -67,6 +67,8 @@ class ParlayBan(Cog):
         self.channel_id: int = 1344374500271329320  # Ban list channel ID
         self.max_nominations_per_user = 5
         self.poll_message_id: int = None
+        self.nomination_message = None
+        self.update_nominations.start()
 
     @app_commands.command(name="nominate", description="Nominate a player to be banned from parlays this week")
     async def nominate(self, interaction: Interaction, player_name: str):
@@ -117,8 +119,40 @@ class ParlayBan(Cog):
             {"$push": {"nominated_players": player_name}}
         )
 
-        await interaction.response.send_message(f"✅ {player_name.title()} has been nominated!")
-    
+        await interaction.response.send_message(f"✅ {player_name.title()} has been nominated!", delete_after=30)
+
+    @tasks.loop(minutes=30)
+    async def update_nominations(self):
+        channel = self.bot.get_channel(self.channel_id)
+        if not channel:
+            return
+        nominations = list(nominations_collection.find())
+        if not nominations:
+            return
+        
+        top_players = sorted(nominations, key=lambda x: x["votes"], reverse=True)
+
+        embed = Embed(
+            title="🏆 Current Nominations",
+            color=discord.Color.red()
+        )
+        message_content = "\n".join([f"**{i+1}.** {player['player_name']} ({player['votes']} votes)" for i, player in enumerate(top_players)])
+        embed.add_field(name="Candidates", value=message_content, inline=False)
+
+        if self.nomination_message:
+            try:
+                await self.nomination_message.delete()
+                print("🗑️ DEBUG: Deleted old nominations message.")
+            except discord.NotFound:
+                print("⚠️ DEBUG: Old nominations message not found, sending new one.")
+
+        # Send new message and store it
+        self.nomination_message = await channel.send(embed=embed)
+
+    @update_nominations.before_loop
+    async def before_update_nominations(self):
+        await self.bot.wait_until_ready()
+        
     @commands.command()
     @commands.has_permissions(administrator=True)
     async def start_voting(self, ctx: Context, duration: int = 24):
