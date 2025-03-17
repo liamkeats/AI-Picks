@@ -124,10 +124,14 @@ class ParlayBan(Cog):
     @tasks.loop(minutes=30)
     async def update_nominations(self):
         channel = self.bot.get_channel(self.channel_id)
+        voting_active = db["voting_state"].find_one({"status": "active"})
         if not channel:
             return
         nominations = list(nominations_collection.find())
         if not nominations:
+            return
+        if voting_active:
+            print("🗑️ DEBUG: Not showing nominations since voting is active.")
             return
         
         top_players = sorted(nominations, key=lambda x: x["votes"], reverse=True)
@@ -201,6 +205,25 @@ class ParlayBan(Cog):
         top_players = sorted(nominations, key=lambda x: x["votes"], reverse=True)[:10]
         votes = {player["player_name"]: 0 for player in top_players}
 
+
+        #send message
+        message ="""@everyone
+# 🚨🚨 **PARLAY BAN LIST VOTING IS LIVE!** 🚨🚨
+# 🔥 **It’s time to make your voice heard!** 🔥 
+🔴 **Who deserves to be BANNED this week?** 🔴
+🏆  **The nominations are in, and now it’s YOUR turn to decide!** Click a button below to cast your vote and influence the **official Parlay Ban List.** 🏆 
+
+📜 **🔽 NOMINEES 🔽**  
+*(See the embed below!)*  
+
+⏳ **Voting closes soon—don’t miss your chance to make an impact!** ⏳
+
+⚠️ **Every vote counts. Don’t let someone else decide for you!** ⚠️
+
+💥 **VOTE NOW!** 💥
+                    """
+        await ctx.send(f"{message} ****Voting will be active for {duration} hours.**")
+
         embed = Embed(
             title="🗳️ Parlay Ban List Voting",
             description="Click a button to vote for a player to be banned this week!",
@@ -212,9 +235,9 @@ class ParlayBan(Cog):
         view = BanListVoting(top_players)
         poll_message = await channel.send(embed=embed, view=view)
 
-        await ctx.send(f"Voting has started! Duration: {duration} seconds.")
-
-        await asyncio.sleep(duration)
+        duration1 = duration*3600
+        
+        await asyncio.sleep(duration1)
 
         nominations_collection.delete_many({})  # Clear only after voting ends
 
