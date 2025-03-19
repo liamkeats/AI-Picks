@@ -12,6 +12,7 @@ from cogs.channel_messages import ChannelMessagesCog
 from cogs.embeds import EmbedsCog
 from cogs.banned_players import ParlayBan
 from cogs.welcome import Welcome
+from cogs.reminders import ReminderCog
 
 # Load environment variables from token.env file
 load_dotenv("token.env")
@@ -35,6 +36,8 @@ class AIPicks(Bot):
         await self.add_cog(EmbedsCog(self))
         await self.add_cog(ParlayBan(self))
         await self.add_cog(Welcome(self))
+        await self.add_cog(ReminderCog(self))
+        
         self.add_view(AppBettingButtons())
         self.add_view(SportSelectionButtons())
 

@@ -66,6 +66,7 @@ class ParlayBan(Cog):
         self.bot = bot
         self.channel_id: int = 1344374500271329320  # Ban list channel ID
         self.max_nominations_per_user = 5
+        self.pre_poll_message_id: int = None
         self.poll_message_id: int = None
         self.nomination_message = None
         self.update_nominations.start()
@@ -131,7 +132,6 @@ class ParlayBan(Cog):
         if not nominations:
             return
         if voting_active:
-            print("🗑️ DEBUG: Not showing nominations since voting is active.")
             return
         
         top_players = sorted(nominations, key=lambda x: x["votes"], reverse=True)
@@ -146,7 +146,6 @@ class ParlayBan(Cog):
         if self.nomination_message:
             try:
                 await self.nomination_message.delete()
-                print("🗑️ DEBUG: Deleted old nominations message.")
             except discord.NotFound:
                 print("⚠️ DEBUG: Old nominations message not found, sending new one.")
 
@@ -191,7 +190,7 @@ class ParlayBan(Cog):
         nominations = list(nominations_collection.find())
 
         if not nominations:
-            await ctx.send("No nominations to vote on!")
+            await ctx.send("No nominations to vote on!", delete_after=5)
             db["voting_state"].delete_many({})
             return
 
@@ -222,7 +221,8 @@ class ParlayBan(Cog):
 
 💥 **VOTE NOW!** 💥
                     """
-        await ctx.send(f"{message} ****Voting will be active for {duration} hours.**")
+        pre_poll_message = await ctx.send(f"{message} ****Voting will be active for {duration} seconds.**")
+        self.pre_poll_message_id = pre_poll_message.id  # ✅ Correctly storing the message ID
 
         embed = Embed(
             title="🗳️ Parlay Ban List Voting",
@@ -234,10 +234,11 @@ class ParlayBan(Cog):
 
         view = BanListVoting(top_players)
         poll_message = await channel.send(embed=embed, view=view)
+        self.poll_message_id = poll_message.id  # Store only the message ID
 
-        duration1 = duration*3600
-        
-        await asyncio.sleep(duration1)
+        #duration1 = duration*3600
+        print("is this called")
+        await asyncio.sleep(duration)
 
         nominations_collection.delete_many({})  # Clear only after voting ends
 
@@ -258,18 +259,36 @@ class ParlayBan(Cog):
         
     async def end_voting(self, ctx: Context):
         """End the voting phase and finalize the ban list."""
-        # Get the #ban_list channel
         channel = self.bot.get_channel(self.channel_id)
         if not channel:
             return
+        
+        # Delete the pre-voting message if it exists
+        if self.pre_poll_message_id:
+            try:
+                pre_poll_message = await channel.fetch_message(self.pre_poll_message_id)
+                await pre_poll_message.delete()
+                print("✅ DEBUG: Pre-voting message deleted successfully.")
+            except discord.NotFound:
+                print("⚠️ DEBUG: Pre-voting message not found, possibly already deleted.")
+            self.pre_poll_message_id = None
+        
+        # Delete the poll message if it exists
+        if self.poll_message_id:
+            try:
+                poll_message = await channel.fetch_message(self.poll_message_id)
+                await poll_message.delete()
+                print("✅ DEBUG: Voting message deleted successfully.")
+            except discord.NotFound:
+                print("⚠️ DEBUG: Voting message not found, possibly already deleted.")
+            self.poll_message_id = None
 
-        # Get the current week number
         current_week = datetime.now(timezone.utc).isocalendar()[1]
-        # Count votes directly from `user_votes`
+        
         vote_counts = list(user_votes_collection.aggregate([
             {"$group": {"_id": "$voted_for", "count": {"$sum": 5}}},
             {"$sort": {"count": -1}},
-            {"$limit": 3}
+            {"$limit": 10}
         ]))
 
         if not vote_counts:
@@ -277,47 +296,61 @@ class ParlayBan(Cog):
             db["voting_state"].delete_many({})
             return
 
-        # Create the final list of banned players
         ban_list = [{"player": vote["_id"], "votes": vote["count"]} for vote in vote_counts]
-        # Store in `ban_list` collection
         ban_list_collection.insert_one({
             "week": f"Week {current_week}",
             "banned_players": ban_list
         })
 
-        # Clear the votes collection (but keep nominations)
         user_votes_collection.delete_many({})
 
-        # Format the message with inflated votes
-        ban_list_message = "\n".join([f"🚫 {entry['player']} ({entry['votes']} votes)" for entry in ban_list])
-        embed = Embed(
-            title="🚨 Weekly Parlay Ban List",
-            description=ban_list_message if ban_list_message else "No players received votes.",
-            color=discord.Color.red()
+        banned_players = ban_list[:3]
+        close_calls = ban_list[3:]
+
+        embed = discord.Embed(
+            title="🚨🚨 𝗪𝗘𝗘𝗞𝗟𝗬 𝗣𝗔𝗥𝗟𝗔𝗬 𝗕𝗔𝗡 𝗟𝗜𝗦𝗧 🚨🚨",
+            description=(
+                "📢 **@everyone**  ✨ **𝗧𝗛𝗘 𝗩𝗢𝗧𝗘𝗦 𝗔𝗥𝗘 𝗜𝗡!** ✨ 🗳️\n\n"
+                "🔥 **The community has spoken, and these players are OFF the board this week!** 🔥\n\n"
+                "⚠️ **Adjust your bets accordingly!** ⚠️"
+            ),
+            color=discord.Color.gold()
         )
 
-        # Send the embed with the ban list
-        await channel.send(embed=embed)
+        banned_text = "\n".join([f'🚫 **{entry["player"]}** — **{entry["votes"]} votes**' for entry in banned_players])
+        embed.add_field(name="🚫 **𝗢𝗙𝗙𝗜𝗖𝗜𝗔𝗟𝗟𝗬 𝗕𝗔𝗡𝗡𝗘𝗗 (𝗧𝗢𝗣 𝟯)** 🚫", value=banned_text, inline=False)
 
-        # Remove voting state
+        if close_calls:
+            close_calls_text = "\n".join([f'**{"🔟" if (i+4) == 10 else str(i+4) + "️⃣"} {entry["player"]}** — **{entry["votes"]} votes**' for i, entry in enumerate(close_calls)])
+            embed.add_field(name="📊 **𝗖𝗟𝗢𝗦𝗘 𝗖𝗔𝗟𝗟𝗦 (𝗡𝗲𝗮𝗿𝗹𝘆 𝗕𝗮𝗻𝗻𝗲𝗱, 𝗕𝘂𝘁 𝗦𝘂𝗿𝘃𝗶𝘃𝗲𝗱)** 📊", value=close_calls_text, inline=False)
+
+        embed.set_footer(text="🗳️ 𝗠𝗮𝗸𝗲 𝘆𝗼𝘂𝗿 𝘃𝗼𝗶𝗰𝗲 𝗵𝗲𝗮𝗿𝗱 𝗶𝗻 𝗻𝗲𝘅𝘁 𝘄𝗲𝗲𝗸'𝘀 𝘃𝗼𝘁𝗲! 𝗗𝗼𝗻'𝘁 𝗺𝗶𝘀𝘀 𝗼𝘂𝘁!")
+
+        await channel.send(content="@everyone", embed=embed)
+
         db["voting_state"].delete_many({})
 
     @app_commands.command(name="show_banlist", description="View the banned players for a specific week.")
     async def show_banlist(self, interaction: Interaction, week: int = None):
         """Show the banned players for the requested week. Defaults to the current week if none is provided."""
-        
-        # Get the current week if no week is specified
         if week is None:
             week = datetime.now(timezone.utc).isocalendar()[1]
-
         week_str = f"Week {week}"
         ban_entry = ban_list_collection.find_one({"week": week_str})
 
         if not ban_entry or not ban_entry["banned_players"]:
             await interaction.response.send_message(f"No players were banned in {week_str}.")
             return
-        
-        ban_list_message = "\n".join([f"🚫 {player}" for player in ban_entry["banned_players"]])
-        embed = Embed(title=f"🚨 {week_str} Parlay Ban List", description=ban_list_message, color=discord.Color.red())
+
+        banned_text = "\n".join([f'🚫 {entry["player"]} ({entry["votes"]} votes)' for entry in ban_entry["banned_players"][:3]])
+        close_calls_text = "\n".join([f'**{["4️⃣", "5️⃣", "6️⃣", "7️⃣", "8️⃣", "9️⃣", "🔟"][i]} {entry["player"]}** — {entry["votes"]} votes' for i, entry in enumerate(ban_entry["banned_players"][3:])])
+
+        embed = Embed(
+            title=f"🚨 {week_str} Parlay Ban List",
+            color=discord.Color.red()
+        )
+        embed.add_field(name="🚫 Officially Banned (Top 3) 🚫", value=banned_text, inline=False)
+        if close_calls_text:
+            embed.add_field(name="📊 Close Calls (Nearly Banned, But Survived) 📊", value=close_calls_text, inline=False)
 
         await interaction.response.send_message(embed=embed)
