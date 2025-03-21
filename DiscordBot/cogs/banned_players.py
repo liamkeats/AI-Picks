@@ -3,7 +3,7 @@ import difflib
 from discord import app_commands, Interaction, Embed, ButtonStyle
 from discord.ext import commands, tasks
 from discord.ext.commands import Cog, Context
-from discord.ui import View, Button
+from discord.ui import View, Button, Modal, TextInput
 
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
@@ -16,6 +16,7 @@ from datetime import datetime, timezone
 
 from .roles.user_roles import *
 from cogs.other.player_names import * 
+from .channels.channel_ids import *
 
 load_dotenv("token.env")
 PASSWORD = os.getenv('MONGO_PASSWORD')
@@ -60,6 +61,50 @@ class BanListVoting(View):
             await interaction.response.send_message(f"✅ You voted for {player_name}!", ephemeral=True)
 
         return vote_callback
+
+class NominateModal(Modal, title="Nominate Player"):
+    name = TextInput(label="Player Nomination", placeholder="Enter a player to nominate here")
+
+    async def on_submit(self, interaction: Interaction):
+        max_nominations_per_user = 5
+        nba_players = player_names
+
+        matches = difflib.get_close_matches(self.name.value, nba_players, n=3, cutoff=0.6)
+
+        user_id = interaction.user.id
+        user_entry = user_nominations_collection.find_one({"user_id": user_id})
+
+        if not user_entry:
+            user_nominations_collection.insert_one({"user_id": user_id, "nominated_players": []})
+
+        user_entry = user_nominations_collection.find_one({"user_id": user_id})
+        if len(user_entry["nominated_players"]) >= max_nominations_per_user:
+            await interaction.response.send_message("❌ You have reached your nomination limit (5).", ephemeral=True)
+            return
+        
+        if matches:
+            player_name = matches[0]
+            await interaction.response.send_message(f"{player_name} has been nominated", delete_after=30)
+        else:
+            await interaction.response.send_message("learn to spell cuh", ephemeral=True)
+            return
+
+        player_entry = nominations_collection.find_one({"player_name": player_name})
+        if player_entry:
+            nominations_collection.update_one(
+                {"player_name": player_name},
+                {"$inc": {"votes": 1}, "$addToSet": {"nominated_by": user_id}}
+            )
+        else:
+            nominations_collection.insert_one({
+                "player_name": player_name,
+                "nominated_by": [user_id],
+                "votes": 1
+            })
+        user_nominations_collection.update_one(
+            {"user_id": user_id},
+            {"$push": {"nominated_players": player_name}}
+        )
 
 class ParlayBan(Cog):
     def __init__(self, bot):
@@ -122,8 +167,18 @@ class ParlayBan(Cog):
 
         await interaction.response.send_message(f"✅ {player_name.title()} has been nominated!", delete_after=30)
 
-    @tasks.loop(minutes=30)
+    @tasks.loop(minutes=5)
     async def update_nominations(self):
+
+        view = View(timeout=None)
+
+        button = Button(label="Nominate A Player", style = ButtonStyle.primary)
+        async def button_callback(interaction: Interaction):
+            await interaction.response.send_modal(NominateModal())
+        button.callback = button_callback
+
+        view.add_item(button)
+
         channel = self.bot.get_channel(self.channel_id)
         voting_active = db["voting_state"].find_one({"status": "active"})
         if not channel:
@@ -150,12 +205,32 @@ class ParlayBan(Cog):
                 print("⚠️ DEBUG: Old nominations message not found, sending new one.")
 
         # Send new message and store it
-        self.nomination_message = await channel.send(embed=embed)
+        self.nomination_message = await channel.send(embed=embed, view=view)
 
     @update_nominations.before_loop
     async def before_update_nominations(self):
         await self.bot.wait_until_ready()
+    
+    @app_commands.command(name="nominators", description="get the list of users who nominated")
+    @app_commands.default_permissions(administrator=True)
+    async def nominators(self, interaction: Interaction):
+        users = user_nominations_collection.distinct("user_id")
+
+        if not users:
+            await interaction.response.send_message("No users have submitted nominations yet", ephemeral=True)
+            return
         
+        user_mentions = ", ".join(f"<@{user_id}>" for user_id in users)
+        response_message = (
+            "🎉 **NOMINATION REWARDS!** 🎉\n\n"
+            "🏆 **All users who nominated are entered for a chance to win a** ***FREE 1-week VIP membership!*** 🏆\n"
+            "👑 **Your nominations help shape the weekly ban list—thank you for participating!** 🙌\n\n"
+            "🔹 **Users who nominated:**\n"
+            f"{user_mentions}\n\n"
+            f"🔥 **Want to enter?** Nominate now in <#{ban_list_channel}> before it's too late! "
+        )
+        await interaction.response.send_message(response_message, ephemeral=False)
+
     @commands.command()
     @commands.has_permissions(administrator=True)
     async def start_voting(self, ctx: Context, duration: int = 24):
@@ -339,7 +414,7 @@ class ParlayBan(Cog):
         ban_entry = ban_list_collection.find_one({"week": week_str})
 
         if not ban_entry or not ban_entry["banned_players"]:
-            await interaction.response.send_message(f"No players were banned in {week_str}.")
+            await interaction.response.send_message(f"No players were banned in {week_str}.", delete_after= 30)
             return
 
         banned_text = "\n".join([f'🚫 {entry["player"]} ({entry["votes"]} votes)' for entry in ban_entry["banned_players"][:3]])
@@ -353,4 +428,4 @@ class ParlayBan(Cog):
         if close_calls_text:
             embed.add_field(name="📊 Close Calls (Nearly Banned, But Survived) 📊", value=close_calls_text, inline=False)
 
-        await interaction.response.send_message(embed=embed)
+        await interaction.response.send_message(embed=embed, delete_after=30)

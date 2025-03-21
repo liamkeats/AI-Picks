@@ -13,6 +13,7 @@ from cogs.embeds import EmbedsCog
 from cogs.banned_players import ParlayBan
 from cogs.welcome import Welcome
 from cogs.reminders import ReminderCog
+from cogs.testing import TestingCog
 
 # Load environment variables from token.env file
 load_dotenv("token.env")
@@ -41,6 +42,18 @@ class AIPicks(Bot):
         self.add_view(AppBettingButtons())
         self.add_view(SportSelectionButtons())
 
+    async def close(self):
+        parlay_ban_cog = self.get_cog("ParlayBan")
+
+        if parlay_ban_cog and parlay_ban_cog.nomination_message:
+            try:
+                await parlay_ban_cog.nomination_message.delete()
+            except discord.NotFound:
+                return
+            except discord.Forbidden:
+                return
+        await super().close()
+        
 bot = AIPicks()
 
 # starting the bot
@@ -57,7 +70,6 @@ async def sync(ctx:Context):
     message = await ctx.send("Syncing commands")
     commands_synced = await bot.tree.sync()
     await message.edit(content=f"Synced {len(commands_synced)} commands")
-
 
 # Run the bot with your token
 bot.run(TOKEN)
