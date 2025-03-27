@@ -122,7 +122,7 @@ class ParlayBan(Cog):
         
         voting_status = db["voting_state"].find_one({"status": "active"})
         if voting_status:
-            await interaction.response.send_message("Nominations are closed. Voting is in progress.")
+            await interaction.response.send_message("Nominations are closed. Voting is in progress.", delete_after=10)
             return
 
         # Correct spelling if needed
@@ -183,19 +183,21 @@ class ParlayBan(Cog):
         voting_active = db["voting_state"].find_one({"status": "active"})
         if not channel:
             return
-        nominations = list(nominations_collection.find())
-        if not nominations:
-            return
         if voting_active:
             return
-        
+        nominations = list(nominations_collection.find())
         top_players = sorted(nominations, key=lambda x: x["votes"], reverse=True)
 
         embed = Embed(
             title="🏆 Current Nominations",
             color=discord.Color.red()
         )
-        message_content = "\n".join([f"**{i+1}.** {player['player_name']} ({player['votes']} votes)" for i, player in enumerate(top_players)])
+
+        if top_players:
+            message_content = "\n".join([f"**{i+1}.** {player['player_name']} ({player['votes']} votes)" for i, player in enumerate(top_players)])
+        else:
+            message_content = "No players have been nominated yet. Be the first to nominate using the button below!"
+
         embed.add_field(name="Candidates", value=message_content, inline=False)
 
         if self.nomination_message:
@@ -231,6 +233,24 @@ class ParlayBan(Cog):
         )
         await interaction.response.send_message(response_message, ephemeral=False)
 
+    async def voters(self, channel: discord.TextChannel):
+        users = user_votes_collection.distinct("voted_by")
+
+        if not users:
+            print("no users voted")
+            return
+        
+        user_mentions = ", ".join(f"<@{user_id}>" for user_id in users)
+        response_message = (
+            "🗳️ **VOTING APPRECIATION** 🗳️\n\n"
+            "🎉 **Huge thanks to everyone who cast their vote in this week's Parlay Ban List!** 🎉\n"
+            "🙌 **Your input directly shapes the plays allowed each week — every vote counts!** 🙌\n\n"
+            "📋 **Voters this week:**\n"
+            f"{user_mentions}\n\n"
+            f"🔥 **Want to be part of next week’s decision?** Make sure to vote in <#{ban_list_channel}> when voting opens!"
+        )
+        await channel.send(response_message)
+
     @commands.command()
     @commands.has_permissions(administrator=True)
     async def start_voting(self, ctx: Context, duration: int = 24):
@@ -254,6 +274,14 @@ class ParlayBan(Cog):
 
     async def _start_voting_process(self, ctx: Context, duration: int, override: bool):
         """Handles the main voting process, with override support."""
+
+        #delete the nomination leaderboard.
+
+        if self.nomination_message:
+            try:
+                await self.nomination_message.delete()
+            except discord.NotFound:
+                print("⚠️ DEBUG: Old nominations message not found")
 
         if override:
             print("⚠️ DEBUG: Override enabled - forcing voting start.")
@@ -296,7 +324,7 @@ class ParlayBan(Cog):
 
 💥 **VOTE NOW!** 💥
                     """
-        pre_poll_message = await ctx.send(f"{message} ****Voting will be active for {duration} seconds.**")
+        pre_poll_message = await ctx.send(f"{message} ****Voting will be active for {duration} hours.**")
         self.pre_poll_message_id = pre_poll_message.id  # ✅ Correctly storing the message ID
 
         embed = Embed(
@@ -311,9 +339,9 @@ class ParlayBan(Cog):
         poll_message = await channel.send(embed=embed, view=view)
         self.poll_message_id = poll_message.id  # Store only the message ID
 
-        #duration1 = duration*3600
-        print("is this called")
-        await asyncio.sleep(duration)
+        duration1 = duration*3600
+        print(f"voting for {duration1} seconds")
+        await asyncio.sleep(duration1)
 
         nominations_collection.delete_many({})  # Clear only after voting ends
 
@@ -376,7 +404,7 @@ class ParlayBan(Cog):
             "week": f"Week {current_week}",
             "banned_players": ban_list
         })
-
+        await self.voters(send_channel)
         user_votes_collection.delete_many({})
 
         banned_players = ban_list[:3]
@@ -404,6 +432,9 @@ class ParlayBan(Cog):
         await channel.send(content="@everyone", embed=embed)
 
         db["voting_state"].delete_many({})
+        send_channel = self.bot.get_channel(announcements_channel)
+        await asyncio.sleep(5)
+        await self.update_nominations()
 
     @app_commands.command(name="show_banlist", description="View the banned players for a specific week.")
     async def show_banlist(self, interaction: Interaction, week: int = None):

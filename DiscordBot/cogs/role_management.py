@@ -95,6 +95,9 @@ class RoleManagementCog(Cog):
     @app_commands.command(name="check_roles", description="A command to check roles and make sure no VIP member also has the Free role.")
     @app_commands.default_permissions(administrator=True)
     async def check_roles(self, interaction:Interaction):
+
+        await interaction.response.defer(ephemeral=True)
+
         changes_made = False
         channel = self.bot.get_channel(LOG_CHANNEL_ID)
 
@@ -104,24 +107,30 @@ class RoleManagementCog(Cog):
         
         for guild in self.bot.guilds:
             for member in guild.members:
+                lifetime_role = utils.get(guild.roles, id=LIFETIME_ROLE_ID)
                 vip_role = utils.get(guild.roles, id=VIP_ROLE_ID)
                 free_role = utils.get(guild.roles, id=FREE_ROLE_ID)
+                
+                if vip_role and free_role and lifetime_role:
+                    if lifetime_role in member.roles and free_role in member.roles:
+                        await member.remove_roles(free_role)
+                        await channel.send(f"Removed 'Free' role from {member.mention} because they have Lifetime.")
+                        changes_made = True
 
-                if vip_role and free_role:
                     if vip_role in member.roles and free_role in member.roles:
                         await member.remove_roles(free_role)
                         await channel.send(f"Removed 'Free' role from {member.mention} because they have VIP.")
                         changes_made = True  # Mark that changes were made
 
-                    if vip_role not in member.roles and free_role not in member.roles:
+                    if vip_role not in member.roles and free_role not in member.roles and lifetime_role not in member.roles:
                         await member.add_roles(free_role)
-                        await channel.send(f"Added 'Free' role to {member.mention} because they don't have VIP.")
+                        await channel.send(f"Added 'Free' role to {member.mention} because they don't have VIP or Lifetime.")
                         changes_made = True  # Mark that changes were made
 
         if not changes_made:
             await channel.send("All roles are correct. No changes made.")
 
-        await interaction.response.send_message("Role check complete!")
+        await interaction.followup.send("Role check complete!")
     
     @commands.command()
     @commands.has_permissions(administrator=True)  # Restrict to users with Admin permissions
@@ -165,11 +174,18 @@ class RoleManagementCog(Cog):
         if any(role.id in IGNORED_ROLE_IDS for role in after.roles):
             return
 
+        lifetime_role = discord.utils.get(after.guild.roles, id=LIFETIME_ROLE_ID)
         vip_role = discord.utils.get(after.guild.roles, id=VIP_ROLE_ID)
         free_role = discord.utils.get(after.guild.roles, id=FREE_ROLE_ID)
 
-        if vip_role and free_role:
+        if vip_role and free_role and lifetime_role:
             #if the vip roles is added and user has free role
+            if lifetime_role in after.roles and free_role in after.roles:
+                await after.remove_roles(free_role)
+                channel = self.bot.get_channel(LOG_CHANNEL_ID)
+                if channel:
+                    await channel.send(f"Removed 'Free' role from {after.mention} because they have Lifetime.")
+
             if vip_role in after.roles and free_role in after.roles:
                 await after.remove_roles(free_role)
                 channel = self.bot.get_channel(LOG_CHANNEL_ID)
@@ -177,8 +193,8 @@ class RoleManagementCog(Cog):
                     await channel.send(f"Removed 'Free' role from {after.mention} because they have VIP.")
 
             # if vip is removed and no free role add the free role
-            elif vip_role not in after.roles and free_role not in after.roles:
+            elif vip_role not in after.roles and free_role not in after.roles and lifetime_role not in after.roles:
                 await after.add_roles(free_role)
                 channel = self.bot.get_channel(LOG_CHANNEL_ID)
                 if channel:
-                    await channel.send(f"Added 'Free' role to {after.mention} because they don't have VIP.")
+                    await channel.send(f"Added 'Free' role to {after.mention} because they don't have VIP or Lifetime.")
