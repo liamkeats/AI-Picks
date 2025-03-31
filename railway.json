@@ -2,6 +2,8 @@
     "build": {
       "builder": "NIXPACKS"
     },
-    "start": "python DiscordBot/bot.py"
+    "start": {
+      "cmd": "python DiscordBot/bot.py"
+    }
   }
   
