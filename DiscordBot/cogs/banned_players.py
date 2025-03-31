@@ -27,7 +27,8 @@ uri = os.getenv("MONGO_URL")
 if not uri or not uri.startswith("mongodb"):
     raise ValueError("❌ MONGO_URL is not set or invalid. Check your Railway environment variables.")
 
-client = MongoClient(uri, server_api=ServerApi('1'))
+client = MongoClient(uri, tlsAllowInvalidCertificates=True, server_api=ServerApi('1'))
+
 print(f"[DEBUG] Mongo URI: {uri}")
 
 try:
