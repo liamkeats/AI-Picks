@@ -22,8 +22,14 @@ load_dotenv("token.env")
 PASSWORD = os.getenv('MONGO_PASSWORD')
 PASSWORD = quote_plus(PASSWORD)
 
-uri = uri = os.getenv("MONGO_URL")
+uri = os.getenv("MONGO_URL")
+
+if not uri or not uri.startswith("mongodb"):
+    raise ValueError("❌ MONGO_URL is not set or invalid. Check your Railway environment variables.")
+
 client = MongoClient(uri, server_api=ServerApi('1'))
+print(f"[DEBUG] Mongo URI: {uri}")
+
 try:
     client.admin.command("ping")
     print("[MongoDB] Connected successfully.")
