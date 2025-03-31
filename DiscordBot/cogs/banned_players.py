@@ -22,7 +22,7 @@ load_dotenv("token.env")
 PASSWORD = os.getenv('MONGO_PASSWORD')
 PASSWORD = quote_plus(PASSWORD)
 
-uri = f"mongodb+srv://keatsliam:{PASSWORD}@aipicks.cdvhr.mongodb.net/?retryWrites=true&w=majority&appName=AiPicks"
+uri = uri = os.getenv("MONGO_URL")
 client = MongoClient(uri, server_api=ServerApi('1'))
 try:
     client.admin.command("ping")
@@ -477,7 +477,7 @@ class ParlayBan(Cog):
     @app_commands.command(name="show_banlist", description="View the banned players for a specific week.")
     async def show_banlist(self, interaction: Interaction, week: int = None):
         """Show the banned players for the requested week. Defaults to the current week if none is provided."""
-        
+
         if db is None:
             print("[MongoDB] Skipping update_nominations — DB not available.")
             return
