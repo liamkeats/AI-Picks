@@ -94,43 +94,53 @@ class RoleManagementCog(Cog):
 
     @app_commands.command(name="check_roles", description="A command to check roles and make sure no VIP member also has the Free role.")
     @app_commands.default_permissions(administrator=True)
-    async def check_roles(self, interaction:Interaction):
-
+    async def check_roles(self, interaction: Interaction):
         await interaction.response.defer(ephemeral=True)
 
-        changes_made = False
-        channel = self.bot.get_channel(LOG_CHANNEL_ID)
+        try:
+            changes_made = False
+            channel = self.bot.get_channel(LOG_CHANNEL_ID)
 
-        if channel is None:
-            await interaction.response.send_message("Log channel not found!")
-            return
-        
-        for guild in self.bot.guilds:
-            for member in guild.members:
-                lifetime_role = utils.get(guild.roles, id=LIFETIME_ROLE_ID)
-                vip_role = utils.get(guild.roles, id=VIP_ROLE_ID)
-                free_role = utils.get(guild.roles, id=FREE_ROLE_ID)
-                
-                if vip_role and free_role and lifetime_role:
-                    if lifetime_role in member.roles and free_role in member.roles:
+            if channel is None:
+                await interaction.followup.send("Log channel not found!")
+                return
+            
+            for guild in self.bot.guilds:
+                for member in guild.members:
+                    lifetime_role = get(guild.roles, id=LIFETIME_ROLE_ID)
+                    vip_role = get(guild.roles, id=VIP_ROLE_ID)
+                    free_role = get(guild.roles, id=FREE_ROLE_ID)
+                    
+                    if lifetime_role and free_role and lifetime_role in member.roles and free_role in member.roles:
                         await member.remove_roles(free_role)
                         await channel.send(f"Removed 'Free' role from {member.mention} because they have Lifetime.")
                         changes_made = True
 
-                    if vip_role in member.roles and free_role in member.roles:
+                    elif vip_role and free_role and vip_role in member.roles and free_role in member.roles:
                         await member.remove_roles(free_role)
                         await channel.send(f"Removed 'Free' role from {member.mention} because they have VIP.")
-                        changes_made = True  # Mark that changes were made
+                        changes_made = True
 
-                    if vip_role not in member.roles and free_role not in member.roles and lifetime_role not in member.roles:
+                    elif all([
+                        vip_role not in member.roles,
+                        lifetime_role not in member.roles,
+                        free_role not in member.roles
+                    ]):
                         await member.add_roles(free_role)
                         await channel.send(f"Added 'Free' role to {member.mention} because they don't have VIP or Lifetime.")
-                        changes_made = True  # Mark that changes were made
+                        changes_made = True
 
-        if not changes_made:
-            await channel.send("All roles are correct. No changes made.")
+            if not changes_made:
+                await channel.send("All roles are correct. No changes made.")
 
-        await interaction.followup.send("Role check complete!")
+            await interaction.followup.send("Role check complete!")
+
+        except Exception as e:
+            print(f"[check_roles Error] {e}")
+            try:
+                await interaction.followup.send("Something went wrong during the role check.")
+            except discord.NotFound:
+                print("Interaction expired before error message could be sent.")
     
     @commands.command()
     @commands.has_permissions(administrator=True)  # Restrict to users with Admin permissions

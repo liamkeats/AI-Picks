@@ -24,12 +24,22 @@ PASSWORD = quote_plus(PASSWORD)
 
 uri = f"mongodb+srv://keatsliam:{PASSWORD}@aipicks.cdvhr.mongodb.net/?retryWrites=true&w=majority&appName=AiPicks"
 client = MongoClient(uri, server_api=ServerApi('1'))
+try:
+    client.admin.command("ping")
+    print("[MongoDB] Connected successfully.")
+    db = client["AI_Picks_Bot"]
+except Exception as e:
+    print(f"[MongoDB Connection Error] {e}")
+    db = None
 
-db = client["AI_Picks_Bot"]
-nominations_collection = db["nominations"]
-user_nominations_collection = db["user_nominations"]
-ban_list_collection = db["ban_list"]
-user_votes_collection = db["user_votes"]
+if db:
+    nominations_collection = db["nominations"]
+    user_nominations_collection = db["user_nominations"]
+    ban_list_collection = db["ban_list"]
+    user_votes_collection = db["user_votes"]
+else:
+    nominations_collection = user_nominations_collection = ban_list_collection = user_votes_collection = None
+
 
 
 class BanListVoting(View):
@@ -119,7 +129,10 @@ class ParlayBan(Cog):
     @app_commands.command(name="nominate", description="Nominate a player to be banned from parlays this week")
     async def nominate(self, interaction: Interaction, player_name: str):
         """Nominate a player to be banned from parlays this week."""
-        
+        if db is None:
+            print("[MongoDB] Skipping update_nominations — DB not available.")
+            return
+
         voting_status = db["voting_state"].find_one({"status": "active"})
         if voting_status:
             await interaction.response.send_message("Nominations are closed. Voting is in progress.", delete_after=10)
@@ -169,7 +182,10 @@ class ParlayBan(Cog):
 
     @tasks.loop(minutes=5)
     async def update_nominations(self):
-
+        if db is None:
+            print("[MongoDB] Skipping update_nominations — DB not available.")
+            return
+        
         view = View(timeout=None)
 
         button = Button(label="Nominate A Player", style = ButtonStyle.primary)
@@ -228,6 +244,11 @@ class ParlayBan(Cog):
     @app_commands.command(name="nominators", description="get the list of users who nominated")
     @app_commands.default_permissions(administrator=True)
     async def nominators(self, interaction: Interaction):
+
+        if user_nominations_collection is None:
+            await interaction.response.send_message("Database is currently unavailable. Please try again later.", ephemeral=True)
+            return
+
         users = user_nominations_collection.distinct("user_id")
 
         if not users:
@@ -246,6 +267,11 @@ class ParlayBan(Cog):
         await interaction.response.send_message(response_message, ephemeral=False)
 
     async def voters(self, channel: discord.TextChannel):
+
+        if db is None:
+            print("[MongoDB] Skipping update_nominations — DB not available.")
+            return
+        
         users = user_votes_collection.distinct("voted_by")
 
         if not users:
@@ -451,6 +477,11 @@ class ParlayBan(Cog):
     @app_commands.command(name="show_banlist", description="View the banned players for a specific week.")
     async def show_banlist(self, interaction: Interaction, week: int = None):
         """Show the banned players for the requested week. Defaults to the current week if none is provided."""
+        
+        if db is None:
+            print("[MongoDB] Skipping update_nominations — DB not available.")
+            return
+        
         if week is None:
             week = datetime.now(timezone.utc).isocalendar()[1]
         week_str = f"Week {week}"
