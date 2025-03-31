@@ -3,7 +3,7 @@
       "builder": "NIXPACKS"
     },
     "start": {
-      "cmd": "python DiscordBot/bot.py"
+      "cmd": "python3 DiscordBot/bot.py"
     }
   }
   
