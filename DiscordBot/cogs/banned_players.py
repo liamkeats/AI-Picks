@@ -33,15 +33,16 @@ if not uri or not uri.startswith("mongodb+srv://"):
 
 print(f"[DEBUG] Mongo URI: {uri}")
 
-# ✅ Connect to Mongo with cert skipping
+print(f"[DEBUG] Attempting to connect with URI: {uri}")
 try:
     client = MongoClient(uri, tls=True, tlsAllowInvalidCertificates=True, server_api=ServerApi('1'))
-    client.admin.command("ping")  # test connection
+    client.admin.command("ping")
     print("[MongoDB] Connected successfully.")
     db = client["AI_Picks_Bot"]
 except Exception as e:
     print(f"[MongoDB Connection Error] {e}")
     db = None
+
 
 # 🧱 Initialize collections if db connected
 if db:
