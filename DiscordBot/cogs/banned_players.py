@@ -67,9 +67,9 @@ class NominateModal(Modal, title="Nominate Player"):
 
     async def on_submit(self, interaction: Interaction):
         max_nominations_per_user = 5
-        nba_players = player_names
+        player_names = nba_player_names + mlb_player_names
 
-        matches = difflib.get_close_matches(self.name.value, nba_players, n=3, cutoff=0.6)
+        matches = difflib.get_close_matches(self.name.value, player_names, n=3, cutoff=0.6)
 
         user_id = interaction.user.id
         user_entry = user_nominations_collection.find_one({"user_id": user_id})
@@ -127,8 +127,8 @@ class ParlayBan(Cog):
 
         # Correct spelling if needed
         original_name = player_name
-        nba_players = player_names
-        matches = difflib.get_close_matches(player_name, nba_players, n=3, cutoff=0.6)
+        player_names = nba_player_names + mlb_player_names
+        matches = difflib.get_close_matches(player_name, player_names, n=3, cutoff=0.6)
         
         if matches:
             player_name = matches[0]
@@ -194,11 +194,23 @@ class ParlayBan(Cog):
         )
 
         if top_players:
-            message_content = "\n".join([f"**{i+1}.** {player['player_name']} ({player['votes']} votes)" for i, player in enumerate(top_players)])
-        else:
-            message_content = "No players have been nominated yet. Be the first to nominate using the button below!"
+            lines = [
+                f"**{i+1}.** {player['player_name']} ({player['votes']} votes)"
+                for i, player in enumerate(top_players)
+            ]
 
-        embed.add_field(name="Candidates", value=message_content, inline=False)
+            message = ""
+            field_count = 1
+            for line in lines:
+                if len(message) + len(line) + 1 > 1024:
+                    embed.add_field(name="\u200b", value=message.strip(), inline=False)
+                    message = ""
+                    field_count += 1
+                message += line + "\n"
+
+            if message:
+                embed.add_field(name="\u200b", value=message.strip(), inline=False)
+
 
         if self.nomination_message:
             try:

@@ -23,7 +23,7 @@ testing_user_nominations_collection = db["testing"]
 testing_nominations_collection = db["testing2"]
 
 from cogs.other.player_names import *
-nba_players = player_names
+player_names = mlb_player_names + nba_player_names
 
 class TestModal(Modal, title="Nominate Player"):
     name = TextInput(label="Player Nomination", placeholder="Enter a player name here")
@@ -33,7 +33,7 @@ class TestModal(Modal, title="Nominate Player"):
         max_nominations_per_user = 5
         print(f"user name: {interaction.user} and their id: {interaction.user.id}")
 
-        matches = difflib.get_close_matches(self.name.value, nba_players, n=3, cutoff=0.6)
+        matches = difflib.get_close_matches(self.name.value, player_names, n=3, cutoff=0.6)
         
         
         user_id = interaction.user.id
