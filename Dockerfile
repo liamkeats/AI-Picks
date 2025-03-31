@@ -1,23 +1,22 @@
-# Use a lightweight Python image
 FROM python:3.12-slim
-
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
 
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies including SSL certs
-RUN apt-get update && apt-get install -y gcc libssl-dev curl ca-certificates && \
+# Install system dependencies for SSL and certificates
+RUN apt-get update && \
+    apt-get install -y gcc libssl-dev curl ca-certificates && \
     update-ca-certificates
 
-# Copy requirements and install them
+# Copy and install Python dependencies
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the rest of the project
+# Copy project files
 COPY . .
 
-# Command to run your bot
-CMD ["python", "DiscordBot/bot.py"]
+# Expose port (if needed)
+EXPOSE 8000
+
+# Run the bot
+CMD ["python", "bot.py"]

@@ -35,7 +35,7 @@ print(f"[DEBUG] Mongo URI: {uri}")
 
 # ✅ Connect to Mongo with cert skipping
 try:
-    client = MongoClient(uri, tlsAllowInvalidCertificates=True, server_api=ServerApi('1'))
+    client = MongoClient(uri, tls=True, tlsAllowInvalidCertificates=True, server_api=ServerApi('1'))
     client.admin.command("ping")  # test connection
     print("[MongoDB] Connected successfully.")
     db = client["AI_Picks_Bot"]
