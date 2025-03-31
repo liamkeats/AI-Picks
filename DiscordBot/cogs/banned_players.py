@@ -8,6 +8,7 @@ from discord.ui import View, Button, Modal, TextInput
 
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
+import traceback
 
 from dotenv import load_dotenv
 from urllib.parse import quote_plus
@@ -27,24 +28,26 @@ PASSWORD = quote_plus(PASSWORD)
 
 uri = os.getenv("MONGO_URL")
 
-# 🔍 Validate the URI
-if not uri or not uri.startswith("mongodb+srv://"):
-    raise ValueError("❌ MONGO_URL is not set or invalid. Check your Railway environment variables.")
-
 print(f"[DEBUG] Mongo URI: {uri}")
+print("[DEBUG] Creating MongoClient now")
 
-print(f"[DEBUG] Attempting to connect with URI: {uri}")
+# Mongo connection
 try:
-    client = MongoClient(uri, tls=True, tlsAllowInvalidCertificates=True, server_api=ServerApi('1'))
+    client = MongoClient(
+        uri,
+        tls=True,
+        tlsAllowInvalidCertificates=True,
+        server_api=ServerApi('1')
+    )
     client.admin.command("ping")
     print("[MongoDB] Connected successfully.")
     db = client["AI_Picks_Bot"]
 except Exception as e:
     print(f"[MongoDB Connection Error] {e}")
+    traceback.print_exc()
     db = None
 
-
-# 🧱 Initialize collections if db connected
+# Collections
 if db:
     nominations_collection = db["nominations"]
     user_nominations_collection = db["user_nominations"]
@@ -55,7 +58,6 @@ else:
     user_nominations_collection = None
     ban_list_collection = None
     user_votes_collection = None
-
 
 
 class BanListVoting(View):
