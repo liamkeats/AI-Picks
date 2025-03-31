@@ -1,3 +1,4 @@
+import os
 import discord
 import difflib
 from discord import app_commands, Interaction, Embed, ButtonStyle
@@ -8,7 +9,6 @@ from discord.ui import View, Button, Modal, TextInput
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 
-import os
 from dotenv import load_dotenv
 from urllib.parse import quote_plus
 import asyncio
@@ -18,34 +18,42 @@ from .roles.user_roles import *
 from cogs.other.player_names import * 
 from .channels.channel_ids import *
 
+# 🔐 Load environment variables
 load_dotenv("token.env")
+
+# Grab Mongo password and URL from environment
 PASSWORD = os.getenv('MONGO_PASSWORD')
 PASSWORD = quote_plus(PASSWORD)
 
 uri = os.getenv("MONGO_URL")
 
-if not uri or not uri.startswith("mongodb"):
+# 🔍 Validate the URI
+if not uri or not uri.startswith("mongodb+srv://"):
     raise ValueError("❌ MONGO_URL is not set or invalid. Check your Railway environment variables.")
-
-client = MongoClient(uri, tlsAllowInvalidCertificates=True, server_api=ServerApi('1'))
 
 print(f"[DEBUG] Mongo URI: {uri}")
 
+# ✅ Connect to Mongo with cert skipping
 try:
-    client.admin.command("ping")
+    client = MongoClient(uri, tlsAllowInvalidCertificates=True, server_api=ServerApi('1'))
+    client.admin.command("ping")  # test connection
     print("[MongoDB] Connected successfully.")
     db = client["AI_Picks_Bot"]
 except Exception as e:
     print(f"[MongoDB Connection Error] {e}")
     db = None
 
+# 🧱 Initialize collections if db connected
 if db:
     nominations_collection = db["nominations"]
     user_nominations_collection = db["user_nominations"]
     ban_list_collection = db["ban_list"]
     user_votes_collection = db["user_votes"]
 else:
-    nominations_collection = user_nominations_collection = ban_list_collection = user_votes_collection = None
+    nominations_collection = None
+    user_nominations_collection = None
+    ban_list_collection = None
+    user_votes_collection = None
 
 
 
@@ -137,7 +145,7 @@ class ParlayBan(Cog):
     async def nominate(self, interaction: Interaction, player_name: str):
         """Nominate a player to be banned from parlays this week."""
         if db is None:
-            print("[MongoDB] Skipping update_nominations — DB not available.")
+            print("[MongoDB] Skipping nominate — DB not available.")
             return
 
         voting_status = db["voting_state"].find_one({"status": "active"})
@@ -276,7 +284,7 @@ class ParlayBan(Cog):
     async def voters(self, channel: discord.TextChannel):
 
         if db is None:
-            print("[MongoDB] Skipping update_nominations — DB not available.")
+            print("[MongoDB] Skipping voters — DB not available.")
             return
         
         users = user_votes_collection.distinct("voted_by")
@@ -486,7 +494,7 @@ class ParlayBan(Cog):
         """Show the banned players for the requested week. Defaults to the current week if none is provided."""
 
         if db is None:
-            print("[MongoDB] Skipping update_nominations — DB not available.")
+            print("[MongoDB] Skipping show banlist — DB not available.")
             return
         
         if week is None:
