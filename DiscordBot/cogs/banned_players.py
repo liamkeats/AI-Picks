@@ -9,6 +9,7 @@ from discord.ui import View, Button, Modal, TextInput
 from pymongo.mongo_client import MongoClient
 from pymongo.server_api import ServerApi
 import traceback
+import socket
 
 from dotenv import load_dotenv
 from urllib.parse import quote_plus
@@ -39,6 +40,7 @@ try:
         tlsAllowInvalidCertificates=True,
         server_api=ServerApi('1')
     )
+    print("[DEBUG] DNS Lookup:", socket.gethostbyname('aipicks.cdvhr.mongodb.net'))
     client.admin.command("ping")
     print("[MongoDB] Connected successfully.")
     db = client["AI_Picks_Bot"]
