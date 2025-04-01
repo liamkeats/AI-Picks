@@ -1,1 +1,0 @@
-python DiscordBot/bot.py
