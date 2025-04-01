@@ -1,0 +1,16 @@
+app = "ai-picks"  # Make sure this matches your actual app name
+
+primary_region = "yul"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  # You can add secrets or env vars here
+  # DISCORD_TOKEN = "your_token"
+
+[experimental]
+  auto_rollback = true
+
+[processes]
+  app = "python DiscordBot/bot.py"

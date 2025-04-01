@@ -18,13 +18,34 @@ from .roles.user_roles import *
 from cogs.other.player_names import * 
 from .channels.channel_ids import *
 
-load_dotenv("token.env")
+if os.getenv("FLY_APP_NAME") is None:
+    load_dotenv("token.env")
+
+# Load and verify MONGO_PASSWORD
 PASSWORD = os.getenv('MONGO_PASSWORD')
+if not PASSWORD:
+    raise ValueError("MONGO_PASSWORD environment variable not set")
 PASSWORD = quote_plus(PASSWORD)
 
-uri = f"mongodb+srv://keatsliam:{PASSWORD}@aipicks.cdvhr.mongodb.net/?retryWrites=true&w=majority&appName=AiPicks"
-client = MongoClient(uri, server_api=ServerApi('1'))
+# Use full Mongo URI from env if available, otherwise build manually
+MONGO_URI = os.getenv("MONGO_URL")
+if not MONGO_URI:
+    MONGO_URI = f"mongodb+srv://keatsliam:{PASSWORD}@aipicks.cdvhr.mongodb.net/?retryWrites=true&w=majority&tls=true&tlsAllowInvalidCertificates=false"
 
+# Create Mongo client
+print("✅ DEBUG: Attempting MongoDB connection...")
+print(f"🔐 DEBUG: MONGO_URI being used: {MONGO_URI}")
+
+try:
+    client = MongoClient(MONGO_URI, server_api=ServerApi('1'))
+    client.admin.command('ping')
+    print("✅ MongoDB connection successful.")
+except Exception as e:
+    print("❌ MongoDB connection failed.")
+    print(f"❗ ERROR: {e}")
+    raise
+
+# Get your collections
 db = client["AI_Picks_Bot"]
 nominations_collection = db["nominations"]
 user_nominations_collection = db["user_nominations"]
