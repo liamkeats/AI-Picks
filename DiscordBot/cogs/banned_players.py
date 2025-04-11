@@ -18,32 +18,18 @@ from .roles.user_roles import *
 from cogs.other.player_names import * 
 from .channels.channel_ids import *
 
-if os.getenv("FLY_APP_NAME") is None:
-    load_dotenv("token.env")
-
-# Load and verify MONGO_PASSWORD
+load_dotenv("token.env")
 PASSWORD = os.getenv('MONGO_PASSWORD')
-if not PASSWORD:
-    raise ValueError("MONGO_PASSWORD environment variable not set")
-PASSWORD = quote_plus(PASSWORD)
+PASSWORD = quote_plus(str(PASSWORD))
 
-# Use full Mongo URI from env if available, otherwise build manually
-MONGO_URI = os.getenv("MONGO_URL")
-if not MONGO_URI:
-    MONGO_URI = f"mongodb+srv://keatsliam:{PASSWORD}@aipicks.cdvhr.mongodb.net/?retryWrites=true&w=majority&tls=true&tlsAllowInvalidCertificates=false"
+uri = f"mongodb+srv://keatsliam:{PASSWORD}@aipicks.cdvhr.mongodb.net/?retryWrites=true&w=majority&appName=AiPicks"
+client = MongoClient(uri, server_api=ServerApi('1'))
 
-# Create Mongo client
-print("✅ DEBUG: Attempting MongoDB connection...")
-print(f"🔐 DEBUG: MONGO_URI being used: {MONGO_URI}")
-
-try:
-    client = MongoClient(MONGO_URI, server_api=ServerApi('1'))
-    client.admin.command('ping')
-    print("✅ MongoDB connection successful.")
-except Exception as e:
-    print("❌ MongoDB connection failed.")
-    print(f"❗ ERROR: {e}")
-    raise
+db = client["AI_Picks_Bot"]
+nominations_collection = db["nominations"]
+user_nominations_collection = db["user_nominations"]
+ban_list_collection = db["ban_list"]
+user_votes_collection = db["user_votes"]
 
 # Get your collections
 db = client["AI_Picks_Bot"]
@@ -437,6 +423,7 @@ class ParlayBan(Cog):
             "week": f"Week {current_week}",
             "banned_players": ban_list
         })
+        send_channel = self.bot.get_channel(announcements_channel)
         await self.voters(send_channel)
         user_votes_collection.delete_many({})
 
@@ -465,7 +452,6 @@ class ParlayBan(Cog):
         await channel.send(content="@everyone", embed=embed)
 
         db["voting_state"].delete_many({})
-        send_channel = self.bot.get_channel(announcements_channel)
         await asyncio.sleep(5)
         await self.update_nominations()
 

@@ -3,15 +3,17 @@ from discord.ext import commands, tasks
 from discord.ui import Button, View, Modal, TextInput
 from discord import app_commands, Interaction, Embed, ButtonStyle
 from discord.ext.commands import Cog
+import re
 
 from .channels.channel_ids import *
 from .other.bad_words import bad_words
 
 class ReasonModal(Modal):
-    def __init__(self, action_type: str, target_member: discord.Member):
+    def __init__(self, action_type: str, target_member: discord.Member, embed_message: discord.Message):
         super().__init__(title=f"{action_type.title()} Reason", timeout=None)
         self.action_type = action_type
         self.target_member = target_member
+        self.embed_message = embed_message
 
         self.reason = TextInput(
             label="Reason for action",
@@ -32,6 +34,11 @@ class ReasonModal(Modal):
 
     async def on_submit(self, interaction: Interaction):
         reason = self.reason.value
+        description = self.embed_message.embeds[0].description if self.embed_message.embeds else ""
+        match = re.search(r"Message: (.+)", description)
+        offender_message = match.group(1).strip() if match else "N/A"
+
+        offender = self.target_member
 
         if self.action_type =="ban":
             await self.target_member.ban(reason=reason)
@@ -64,27 +71,35 @@ class ReasonModal(Modal):
                     ephemeral=True
                 )
                 return
-            
+        await self.embed_message.delete()
+
         log_channel = interaction.guild.get_channel(logs_channel)
         await log_channel.send(
             f"🚨 **Moderation Action**: {self.action_type.title()}\n"
-            f"👤 **User**: {self.target_member.mention}\n"
+            f"👤 **Offender**: {offender.mention}\n"
+            f"💬 **Message**: {offender_message}\n"
             f"🛠️ **By**: {interaction.user.mention}\n"
-            f"📄 **Reason**: {reason}"
+            f"📄 **Rule Broken**: {reason}"
         )
 
 class ModerationView(View):
-    def __init__(self, target_member: discord.Member):
+    def __init__(self, target_member: discord.Member, embed_message: discord.Message):
         super().__init__(timeout=None)
         self.target_member = target_member
+        self.embed_message = embed_message
 
     @discord.ui.button(label="Ban", style=ButtonStyle.red)
     async def ban_button(self, interaction: Interaction, button: Button):
-        await interaction.response.send_modal(ReasonModal("ban", self.target_member))
+        await interaction.response.send_modal(ReasonModal("ban", self.target_member, self.embed_message))
 
     @discord.ui.button(label="Timeout", style=ButtonStyle.green)
     async def timeout_button(self, interaction: Interaction, button: Button):
-        await interaction.response.send_modal(ReasonModal("timeout", self.target_member))
+        await interaction.response.send_modal(ReasonModal("timeout", self.target_member, self.embed_message))
+
+    @discord.ui.button(label="Clear", style=ButtonStyle.gray)
+    async def clear_button(self, interaction: Interaction, button: Button):
+        await self.embed_message.delete()
+        await interaction.response.send_message("🧹 Cleared moderation message.", ephemeral=True)
 
 class ModerationCog(Cog):
     def __init__(self, bot):
@@ -100,9 +115,14 @@ class ModerationCog(Cog):
             await self.send_violation_log(message)
 
     async def send_violation_log(self, message):
-        embed = Embed(title="Rule Violation", description=f"Offender: {message.author}\nMessage: {message.content}")
+        embed = Embed(
+            title="Rule Violation",
+            description=f"Offender: {message.author}\nMessage: {message.content}"
+        )
         embed.add_field(name="Rule Broken", value="Inappropriate language used.")
 
-        view = ModerationView(target_member=message.author)
         log_channel = message.guild.get_channel(logs_channel)
-        await log_channel.send(embed=embed, view=view)
+        sent_msg = await log_channel.send(embed=embed)
+
+        view = ModerationView(target_member=message.author, embed_message=sent_msg)
+        await sent_msg.edit(view=view)

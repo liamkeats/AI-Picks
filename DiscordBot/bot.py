@@ -14,6 +14,7 @@ from cogs.banned_players import ParlayBan
 from cogs.welcome import Welcome
 from cogs.reminders import ReminderCog
 from cogs.moderation import ModerationCog, ModerationView
+from cogs.giveaway import GiveawayCog
 from cogs.testing import TestingCog
 
 # Load environment variables from token.env file
@@ -40,6 +41,7 @@ class AIPicks(Bot):
         await self.add_cog(Welcome(self))
         await self.add_cog(ReminderCog(self))
         await self.add_cog(ModerationCog(self))
+        await self.add_cog(GiveawayCog(self))
         
         self.add_view(AppBettingButtons())
         self.add_view(SportSelectionButtons())
