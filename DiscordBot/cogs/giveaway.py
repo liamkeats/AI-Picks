@@ -173,4 +173,7 @@ class GiveawayCog(commands.Cog):
         file = File(io.BytesIO(content.encode()), filename="giveaway_names.txt")
         await interaction.followup.send("🎯 Here's your giveaway name list:", file=file)
         print("📤 File sent!")
+        # Clear the giveaway entries after export
+        result = self.giveaway_collection.delete_many({})
+        print(f"🧹 Cleared {result.deleted_count} entries from the database.")
 
