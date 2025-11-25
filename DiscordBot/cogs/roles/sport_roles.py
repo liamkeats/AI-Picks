@@ -5,4 +5,8 @@ sports_role_map = {
     "CBB": "🏀",
     "Soccer": "⚽",
     "Tennis": "🎾",
+    "UFC": "🥊",
+    "CFB": "🏈",
+    "NFL": "🏈",
+    "WNBA": "🏀",
 }

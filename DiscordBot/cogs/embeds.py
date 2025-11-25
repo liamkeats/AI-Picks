@@ -14,21 +14,24 @@ class EmbedsCog(Cog):
     async def thirty(self, ctx: Context):
         # Create an embed message
         embed = Embed(
-            title="Free VIP with these 2 Steps! 🚀",
+            title="🚀Get 30 DAYS FREE VIP In 2 EASY Steps",
             description=(
-                "**First Things First💯**\n"
-                "Click one of the apps linked below and make a NEW account **USING PROMO CODE: AIPICKS**\n\n"
-                "**BEST CHOICES:**\n"
-                f"**<#{sleeper_channel}>** - Play $5, get $55 Instantly!\n"
-                f"**<#{chalkboard_channel}>** - $100 deposit match & $25 sweat free bet\n"
-                f"**<#{underdog_channel}>** - Get up to $1000 in FREE bonus cash!\n\n"
-                "**SOME OTHER APPS**\n"
-                f"**<#{bet_channel}>** - 100% Deposit Match up to $200 & Injury Protection\n"
-                f"**<#{dabble_channel}>** - Get $25 FREE with no deposit\n"
-                f"**<#{wannaparlay_channel}>** - Compete to make the best parlay! $250 Deposit Bonus\n"
-                "---\n\n"
+                "**Step 1**\n"
+                "Make a NEW account with any app linked below **USING PROMO CODE: AIPICKS**\n\n"
+                "**DAILY FANTASY APPS:**\n"
+                f"**<#{chalkboard_channel}>** - GET A 100% DEPOSIT MATCH + FREE PICK\n"
+                f"**<#{boom_channel}>** - $100 Risk Free Entry!\n"
+                f"**<#{underdog_channel}>** - Play $5, Get $100 FREE\n"
+                f"**<#{bet_channel}>** - FREE $10 + $200 in Bonus Cash\n"
+                f"**<#{sleeper_channel}>** - $20 FREE + 100% Deposit Match up to $100\n"
+                f"**<#{dabble_channel}>** - Get $25 FREE on Signup\n\n"
+                "**Social Sportsbooks:**\n"
+                f"**<#{rebet_channel}>** - 100% Deposit Match\n"
+                f"**<#{novig_channel}>** - 90% OFF UP TO $45\n"
+                "---\n"
+
                 "**Second Step!💪**\n"
-                f"**Deposit $10 or more** (use code: AIPICKS) and send a screenshot to us in <#{support_channel}> to claim your month of VIP\n\n"
+                f"**Deposit $10 or more** in any app (use code: AIPICKS) and send a SCREENSHOT to us in <#{support_channel}> to claim your FREE month of VIP\n\n"
                 "**Disclaimer: Each app that you sign up for grants you 30 STACKABLE days of VIP Access! There's no limit to how many apps you can sign up for (3 Apps = 90 Days)**"
             ),
             color=Color.green()  # Set embed color to green
@@ -46,9 +49,8 @@ class EmbedsCog(Cog):
         embed = Embed(
             title="**Welcome to AI Picks Discord 🎉**",
             description=(
-                "**Check out this video to join VIP for 30 Days Completely FREE! 👉 https://discord.com/channels/1309493151102271488/1312451356400812103/1348157464536678493**\n\n"
                 f"✅ FREE PICKS : 1-2 free picks/day are posted in <#{free_picks_channel}> \n\n"
-                f"🏆 VIP COMMUNITY: ALL plays are posted in <#{vip_plays_channel}>\n\n"
+                f"🏆 VIP COMMUNITY: ALL plays (5-15/day) are posted in <#{vip_plays_channel}>\n\n"
                 f"💰 Join VIP for 30 Days FREE or Extend your plan here<#{free_vip_channel}>\n\n"
                 f"🤝 Contact Us: <#{support_channel}>"
             ),
@@ -93,9 +95,8 @@ class EmbedsCog(Cog):
             title="**Are You Ready To Become A Winning Sports Bettor With Our Analysts?💰**",
             description=(
                 "**\n📢 WHAT’S INCLUDED IN VIP? 📢**\n\n"
-                f"**🔥 All Expert Picks →** Get access to every slip posted in <#{vip_plays_channel}>, covering PrizePicks, Sleeper, Underdog, Vivid, and more!\n\n"
+                f"**🔥 All Expert Picks →** Get access to every slip posted in <#{vip_plays_channel}>, covering all major sports: NFL, NBA, MLB, NHL, CBB, CFB, WNBA, MMA, and more!\n\n"
                 "**💬 Exclusive Community Access →** Join our **active betting community**, where members share their own winning slips, discuss plays, and sweat out bets together like a real **betting team.**\n\n"
-                "**🎁 Exclusive Giveaways & Content →** VIP members get access to **giveaways, premium tools, and betting insights** not available to anyone else.\n\n"
                 "**📞 1-on-1 Support →** Need help with plays, bankroll management, or strategy? Get direct access to experienced bettors for guidance.\n\n"
                 "**💰 Maximize Your Edge →** Gain **higher-value picks, better discussions, and exclusive betting advantages** to help you win more!\n\n"
                 "**🚀 Upgrade Now & Join the Team!\n\n**"

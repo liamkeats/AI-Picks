@@ -84,7 +84,7 @@ class RoleManagementCog(Cog):
     @commands.command()
     @commands.has_permissions(administrator=True)
     async def sportsroles(self, ctx):
-        await ctx.send("Select the apps you use the most", view=SportSelectionButtons())
+        await ctx.send("Select sports you want to follow", view=SportSelectionButtons())
         
     @sportsroles.error
     async def reactionbuttons_error(self, ctx, error):
