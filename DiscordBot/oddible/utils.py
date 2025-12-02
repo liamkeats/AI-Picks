@@ -1,6 +1,7 @@
 import json
 from typing import Dict, Tuple, Optional, List
 from collections import defaultdict
+import discord
 
 NBA_TEAMS = {
     "ATL": "Atlanta Hawks",
@@ -38,13 +39,61 @@ NBA_TEAMS = {
 # Simple helper so we can go "Utah Jazz" -> "UTA"
 NBA_NAME_TO_ABBR = {name.lower(): abbr for abbr, name in NBA_TEAMS.items()}
 
-
 # Books we prefer for "Bet now" CTAs (deeplinks)
+# NOTE: keys are lower-case because parse_deeplinks() lowercases them.
 DEEPLINK_PRIORITY = [
-    "draftkings","fanduel","betmgm","espnbet","betrivers",
-    "fanatics","hardrockbet","ballybet","novig","prophetx",
-    "prizepicks","underdog"
+    # Your featured books first
+    "chalkboard",
+    "underdog",
+    "betr",
+    "sleeper",
+    "dabble",
+    "boom",
+    "novig",
+    "rebet",
+    "onyx",
+
+    # Then the rest of the “normal” books
+    "draftkings",
+    "fanduel",
+    "betmgm",
+    "espnbet",
+    "betrivers",
+    "fanatics",
+    "hardrockbet",
+    "ballybet",
+    "prophetx",
+    "prizepicks",
 ]
+
+# ---------------- Display settings for groups ----------------
+
+GROUP_ORDER = [
+    "spread",
+    "totals",
+    "moneyline",
+    "player_props",
+    "other",
+]
+
+GROUP_LABELS = {
+    "spread": "⭐ Spread Picks",
+    "totals": "🔥 Totals Picks",
+    "moneyline": "💰 Moneyline Picks",
+    "player_props": "🎯 Player Props",
+    "other": "📦 Other Picks",
+}
+
+GROUP_COLOURS = {
+    "spread": discord.Colour.blue(),
+    "totals": discord.Colour.green(),
+    "moneyline": discord.Colour.gold(),
+    "player_props": discord.Colour.purple(),
+    "other": discord.Colour.dark_grey(),
+}
+
+# ---------- Deeplink helpers ----------
+
 
 def parse_deeplinks(deep_links_str: str) -> Dict[str, str]:
     """
@@ -83,6 +132,48 @@ def fill_placeholders(url: str, state: str = "ny", wager_amount: Optional[int] =
     if wager_amount is not None:
         url = url.replace("{wagerAmount}", str(wager_amount))
     return url
+
+def format_deeplink_block(
+    deep_links: Dict[str, str],
+    state: str = "ny",
+    max_books: int = 3,
+) -> str:
+    """
+    Convert {book: url} into:
+      'Bet: [Underdog](...) · [Sleeper](...) · [Draftkings](...)'
+    showing up to max_books, in DEEPLINK_PRIORITY order.
+    """
+    if not deep_links:
+        return ""
+
+    # Respect DEEPLINK_PRIORITY order
+    ordered_books: List[str] = []
+    for b in DEEPLINK_PRIORITY:
+        if b in deep_links:
+            ordered_books.append(b)
+
+    # Add any books not in DEEPLINK_PRIORITY at the end
+    for b in deep_links.keys():
+        if b not in ordered_books:
+            ordered_books.append(b)
+
+    selected = ordered_books[:max_books]
+    if not selected:
+        return ""
+
+    parts: List[str] = []
+    for book in selected:
+        raw_url = deep_links.get(book)
+        if not raw_url:
+            continue
+        url = fill_placeholders(raw_url, state)
+        parts.append(f"[{book.title()}]({url})")  # masked link, no big preview
+
+    if not parts:
+        return ""
+
+    return "Bet: " + " · ".join(parts)
+
 
 # ---------- Hit-rate & dedupe helpers ----------
 
@@ -260,15 +351,21 @@ def format_pick_line(p: dict) -> str:
     odds = p.get("bestOdds")
     hr_txt = hitrate_text(p)
 
-    left = f"**{away} @ {home}** — **{main}**"
-    right_bits = []
-    if odds is not None:
-        right_bits.append(f"(odds: {odds})")
-    if hr_txt:
-        right_bits.append(hr_txt)
-    right = " • ".join(right_bits)
+    header = f"**{away} @ {home}** — **{main}**"
 
-    return f"{left}{' • ' + right if right else ''}".strip()
+    detail_bits = []
+    if odds is not None:
+        detail_bits.append(f"odds: **{odds}**")
+    if hr_txt:
+        detail_bits.append(hr_txt)
+
+    if detail_bits:
+        details = " • ".join(detail_bits)
+        # two-line output: first line is the pick, second line is the details
+        return f"{header}\n  • {details}"
+    else:
+        return header
+
 
 
 # ---------- Market classification & grouping ----------
@@ -424,14 +521,13 @@ def build_discord_message_grouped(
 
         for p in bucket:
             line = format_pick_line(p)
-            # DeepLink handling
-            dl = parse_deeplinks(p.get("deepLinks", ""))
-            best = pick_best_deeplink(dl)
 
-            if best:
-                book, url = best
-                url = fill_placeholders(url, state)
-                line += f" • [Bet on {book.title()}]({url})"
+            # DeepLink handling – show multiple books in priority order
+            dl = parse_deeplinks(p.get("deepLinks", ""))
+            deeplink_block = format_deeplink_block(dl, state=state, max_books=3)
+
+            if deeplink_block:
+                line += f" • {deeplink_block}"
 
             msg += f"• {line}\n"
 
