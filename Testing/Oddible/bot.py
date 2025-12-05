@@ -102,22 +102,50 @@ async def on_ready():
     print("------")
 
 
-async def send_long_message(ctx, content: str):
-    """Split long messages into 2000-char chunks for Discord."""
-    if len(content) <= 2000:
-        await ctx.send(content)
-        return
+def build_oddible_promo_embed() -> discord.Embed:
+    """
+    Bottom promo embed: 'Oddible 7 Days FREE'
+    """
+    embed = discord.Embed(
+        title="Oddible 7 Days FREE ",
+        description="👆\nClaim your free week & make SMARTER picks!",
+        url="https://oddible.onelink.me/zB8n/aipicks",
+        colour=discord.Colour(16753152),  # same color as your JSON (0xFFA200)
+    )
 
-    lines = content.split("\n")
-    chunk = ""
-    for line in lines:
-        if len(chunk) + len(line) + 1 > 2000:
+    embed.set_footer(
+        text=(
+            "The Oddible app is an all in one platform to research picks, "
+            "track your profits, share with friends, and more! It provides "
+            "comprehensive analysis of each pick, grading it from Bad to Great. "
+            "It also provides a leaderboard based on users real time results to "
+            "see and follow the best bettors."
+        )
+    )
+
+    return embed
+
+
+async def send_long_message(ctx, content: str):
+    """Split long messages into 2000-char chunks, then send promo embed."""
+    if content and len(content) <= 2000:
+        await ctx.send(content)
+    else:
+        lines = content.split("\n")
+        chunk = ""
+        for line in lines:
+            if len(chunk) + len(line) + 1 > 2000:
+                await ctx.send(chunk)
+                chunk = line
+            else:
+                chunk = f"{chunk}\n{line}" if chunk else line
+        if chunk:
             await ctx.send(chunk)
-            chunk = line
-        else:
-            chunk = f"{chunk}\n{line}" if chunk else line
-    if chunk:
-        await ctx.send(chunk)
+
+    # Always send the promo embed at the very bottom
+    promo_embed = build_oddible_promo_embed()
+    await ctx.send(embed=promo_embed)
+
 
 def build_pick_embed(p: dict, group_name: str, state: str = "ny") -> discord.Embed:
     """
@@ -230,6 +258,10 @@ async def send_trending_as_embeds(
 
         # One message per group: [header] + the pick cards
         await ctx.send(embeds=[header_embed] + embeds_for_group)
+        # After sending all groups, send the bottom promo card
+    promo_embed = build_oddible_promo_embed()
+    await ctx.send(embed=promo_embed)
+
 
 
 async def send_grouped_embed(ctx, content: str):
@@ -273,6 +305,13 @@ async def send_grouped_embed(ctx, content: str):
 @bot.command(name="nba")
 async def nba_cmd(ctx: commands.Context):
     """Get NBA main-market picks from Oddible."""
+
+    # Delete the user's command message (!nba)
+    try:
+        await ctx.message.delete()
+    except (discord.Forbidden, discord.HTTPException):
+        pass
+
     await ctx.send("Fetching **NBA** picks from Oddible...")
 
     status, headers, data = fetch_trending(
@@ -290,10 +329,16 @@ async def nba_cmd(ctx: commands.Context):
 
     await send_trending_as_embeds(ctx, "NBA", data)
 
-
 @bot.command(name="nfl")
 async def nfl_cmd(ctx: commands.Context):
     """Get NFL main-market picks from Oddible."""
+
+    # Delete the user's command message (!nfl)
+    try:
+        await ctx.message.delete()
+    except (discord.Forbidden, discord.HTTPException):
+        pass
+
     await ctx.send("Fetching **NFL** picks from Oddible...")
 
     status, headers, data = fetch_trending(
@@ -309,12 +354,19 @@ async def nfl_cmd(ctx: commands.Context):
         await ctx.send(f"⚠️ Oddible error: {msg}")
         return
 
+    # Use the same embed flow as NBA / props
     await send_trending_as_embeds(ctx, "NFL", data)
-
 
 @bot.command(name="nbaprops")
 async def nbaprops_cmd(ctx: commands.Context):
     """Get NBA player props from Oddible."""
+
+    # Delete the user's command message (!nbaprops or whatever alias)
+    try:
+        await ctx.message.delete()
+    except (discord.Forbidden, discord.HTTPException):
+        pass
+
     await ctx.send("Fetching **NBA player props** from Oddible...")
 
     status, headers, data = fetch_trending(
