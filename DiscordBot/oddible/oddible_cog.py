@@ -2,13 +2,18 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import List, Dict, Any, Tuple
+from typing import List, Dict, Any, Tuple, Union
 
 import discord
-from discord.ext import commands
+from discord import app_commands
+from discord.ext import commands, tasks
 from dotenv import load_dotenv
 import requests
 from requests.exceptions import RequestException, ReadTimeout, ConnectionError as ReqConnectionError
+
+import datetime
+import pytz
+from enum import Enum
 
 from .books import validate_books, prioritize_deeplink_books
 from .utils import (
@@ -44,6 +49,20 @@ HEADERS = {
 requested_books = ["draftkings", "fanduel", "betmgm", "prizepicks", "underdog", "novig"]
 books = validate_books(requested_books)
 books = prioritize_deeplink_books(books, max_n=6)
+
+# ---TIME SETUP ----
+
+halifax_tz = pytz.timezone("America/Halifax")
+
+
+class Meridiem(Enum):
+    AM = "AM"
+    PM = "PM"
+
+
+class AutoPostState(Enum):
+    ON = "On"
+    OFF = "Off"
 
 
 # ---------------- Core HTTP + helpers (ported from test bot) ----------------
@@ -97,7 +116,11 @@ def build_oddible_promo_embed() -> discord.Embed:
         title="Oddible 7 Days FREE ",
         description="👆\nClaim your free week & make SMARTER picks!",
         url="https://oddible.onelink.me/zB8n/aipicks",
-        colour=discord.Colour(16753152),  # 0xFFA200
+        colour=discord.Colour(5793266),  # 0xFFA200
+    )
+
+    embed.set_image(
+        url="https://lh3.googleusercontent.com/beM-DBpKcBkp5nIu6veCMTVWgkUg6v9qVRi5gOcU5DWqzYok4djzq8zquVtuu_kR2rgaxLRl3VHGdPMLQZeDybHmXMmi0nUHlJMx=h200-rw"
     )
 
     embed.set_footer(
@@ -213,7 +236,7 @@ def build_grouped_pick_embeds(
 
 
 async def send_trending_as_embeds(
-    ctx: commands.Context,
+    dest: Union[commands.Context, discord.abc.Messageable],
     league_label: str,
     raw_json: dict,
     state: str = "ny",
@@ -223,15 +246,17 @@ async def send_trending_as_embeds(
     - One text line: "Top insights..."
     - For each group: header embed + pick embeds in one message
     - Then the Oddible promo embed.
+
+    `dest` can be a commands.Context or any channel-like object with .send().
     """
     grouped = build_grouped_pick_embeds(raw_json, max_per_group=3, state=state)
 
     if not grouped:
-        await ctx.send(f"No picks available for **{league_label}** right now.")
+        await dest.send(f"No picks available for **{league_label}** right now.")
         return
 
     # Top header text (like Outlier's "Top insights for ..." line)
-    await ctx.send(f"Top insights 📈 for **{league_label}** tonight 👇")
+    await dest.send(f"Top insights 📈 for **{league_label}** tonight 👇")
 
     # For each group, send a header embed + its pick embeds (all in one message)
     for gkey in GROUP_ORDER:
@@ -248,11 +273,12 @@ async def send_trending_as_embeds(
             colour=header_colour,
         )
 
-        await ctx.send(embeds=[header_embed] + embeds_for_group)
+        await dest.send(embeds=[header_embed] + embeds_for_group)
 
     # After sending all groups, send the bottom promo card
     promo_embed = build_oddible_promo_embed()
-    await ctx.send(embed=promo_embed)
+    await dest.send(embed=promo_embed)
+
 
 
 # ---------------- Cog wrapper around that logic ----------------
@@ -260,13 +286,48 @@ async def send_trending_as_embeds(
 class OddibleCog(commands.Cog):
     """
     Cog providing !nba, !nfl, !nbaprops using Oddible,
-    with the SAME behaviour as Testing/Oddible/bot.py.
+    plus a daily auto-post schedule controlled by a slash command.
     """
 
     def __init__(self, bot: commands.Bot):
         self.bot = bot
         # reuse validated/prioritised books
         self.books = books
+
+        # Auto-post state
+        self.autopost_enabled: bool = False
+        self.autopost_channel_id: int | None = None
+
+        # Start the auto-post loop (it no-ops until enabled)
+        try:
+            self.autopost_loop.start()
+        except RuntimeError:
+            pass
+
+    # ---------------- Core helpers ----------------
+
+    async def _post_oddible_to_dest(
+        self,
+        dest: discord.abc.Messageable,
+        league_label: str,
+        leagues: List[str],
+        player_props: bool | None = None,
+    ):
+        """Shared logic for prefix commands + auto-post scheduler."""
+        status, headers, data = fetch_trending(
+            leagues=leagues,
+            num_picks=20,
+            risk="moderate",
+            sportsbooks=self.books,
+            player_props=player_props,
+        )
+
+        if status != 200:
+            msg = data.get("message") or data.get("raw") or f"HTTP {status}"
+            await dest.send(f"⚠️ Oddible error: {msg}")
+            return
+
+        await send_trending_as_embeds(dest, league_label, data)
 
     async def _run_oddible_command(
         self,
@@ -283,22 +344,126 @@ class OddibleCog(commands.Cog):
 
         await ctx.send(f"Fetching **{league_label}** picks from Oddible...")
 
-        status, headers, data = fetch_trending(
+        await self._post_oddible_to_dest(
+            dest=ctx,
+            league_label=league_label,
             leagues=leagues,
-            num_picks=20,
-            risk="moderate",
-            sportsbooks=self.books,
             player_props=player_props,
         )
 
-        if status != 200:
-            msg = data.get("message") or data.get("raw") or f"HTTP {status}"
-            await ctx.send(f"⚠️ Oddible error: {msg}")
+    # ---------------- Daily auto-post loop ----------------
+
+    @tasks.loop(time=datetime.time(hour=18, minute=0, tzinfo=halifax_tz))  # default 6 PM
+    async def autopost_loop(self):
+        """
+        Runs once per day at the scheduled time.
+        If enabled, auto-posts NBA, NFL, and NBA props to the configured channel.
+        """
+        if not self.autopost_enabled or self.autopost_channel_id is None:
             return
 
-        await send_trending_as_embeds(ctx, league_label, data)
+        channel = self.bot.get_channel(self.autopost_channel_id)
+        if channel is None:
+            return
 
-    # ---- Commands ----
+        # You can tweak which of these you actually want auto-posted
+        await channel.send("Fetching **NBA** picks from Oddible...")
+        await self._post_oddible_to_dest(channel, "NBA", ["NBA"], player_props=None)
+
+        await channel.send("Fetching **NFL** picks from Oddible...")
+        await self._post_oddible_to_dest(channel, "NFL", ["NFL"], player_props=None)
+
+        await channel.send("Fetching **NBA Player Props** from Oddible...")
+        await self._post_oddible_to_dest(channel, "NBA Player Props", ["NBA"], player_props=True)
+
+    # ---------------- Slash command: schedule control ----------------
+
+    @app_commands.command(
+        name="setoddibleschedule",
+        description="Set the daily Oddible auto-post time and turn it on or off. (Admins only)",
+    )
+    @app_commands.checks.has_permissions(administrator=True)
+    @app_commands.describe(
+        hour="Hour in 12-hour format (1–12)",
+        minute="Minute (0–59)",
+        period="Select AM or PM",
+        enabled="Turn daily auto-posting On or Off",
+    )
+    async def set_oddible_schedule(
+        self,
+        interaction: discord.Interaction,
+        hour: int,
+        minute: int,
+        period: Meridiem,
+        enabled: AutoPostState,
+    ):
+        """
+        Example:
+        /setoddibleschedule hour:6 minute:30 period:PM enabled:On
+        → Auto-post at 6:30 PM Halifax time in this channel.
+        """
+
+        # Validate user input
+        if not (1 <= hour <= 12):
+            await interaction.response.send_message(
+                "❌ Hour must be between **1** and **12**.",
+                ephemeral=True,
+            )
+            return
+
+        if not (0 <= minute <= 59):
+            await interaction.response.send_message(
+                "❌ Minute must be between **0** and **59**.",
+                ephemeral=True,
+            )
+            return
+
+        # Convert 12-hour + AM/PM → 24-hour
+        if period == Meridiem.PM and hour != 12:
+            hour_24 = hour + 12
+        elif period == Meridiem.AM and hour == 12:
+            hour_24 = 0
+        else:
+            hour_24 = hour
+
+        now = datetime.datetime.now(halifax_tz)
+        new_time = now.replace(
+            hour=hour_24,
+            minute=minute,
+            second=0,
+            microsecond=0,
+        )
+
+        # If this time already passed today, schedule from tomorrow
+        if new_time < now:
+            new_time += datetime.timedelta(days=1)
+
+        # Update the loop's trigger time (next run + future days)
+        self.autopost_loop.change_interval(time=new_time.timetz())
+
+        # Use the channel where the command was run
+        if interaction.channel is not None:
+            self.autopost_channel_id = interaction.channel.id
+
+        # Toggle ON/OFF
+        if enabled == AutoPostState.ON:
+            self.autopost_enabled = True
+            msg = (
+                f"📅 Oddible auto-posting is now **ON**.\n"
+                f"It will run daily at **{hour}:{minute:02d} {period.value}** "
+                f"in <#{self.autopost_channel_id}> (Halifax time)."
+            )
+        else:
+            self.autopost_enabled = False
+            msg = (
+                f"🔕 Oddible auto-posting is now **OFF**.\n"
+                f"When turned back on, it will use "
+                f"**{hour}:{minute:02d} {period.value}** (Halifax time)."
+            )
+
+        await interaction.response.send_message(msg, ephemeral=True)
+
+    # ---------------- Prefix commands (unchanged behaviour) ----------------
 
     @commands.command(name="nba")
     async def nba_cmd(self, ctx: commands.Context):
@@ -329,3 +494,7 @@ class OddibleCog(commands.Cog):
             leagues=["NBA"],
             player_props=True,
         )
+
+    # Register the slash command when the cog is loaded
+    async def cog_load(self):
+        self.bot.tree.add_command(self.set_oddible_schedule)
