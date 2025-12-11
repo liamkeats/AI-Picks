@@ -495,6 +495,3 @@ class OddibleCog(commands.Cog):
             player_props=True,
         )
 
-    # Register the slash command when the cog is loaded
-    async def cog_load(self):
-        self.bot.tree.add_command(self.set_oddible_schedule)
